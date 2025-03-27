@@ -1,0 +1,47 @@
+<canvas #globeCanvas></canvas>
+
+<div class="controls">
+  <div class="stats-panel">
+    <h2>Attack Statistics</h2>
+    <div class="top-countries">
+      <h3>Top 10 Most Attacked Countries</h3>
+      <ul>
+        <li *ngFor="let country of topAttackedCountries">
+          {{ country.name }} <span class="count">{{ country.attacks }}</span>
+        </li>
+      </ul>
+    </div>
+    <div class="attack-types">
+      <h3>Attack Types</h3>
+      <ul>
+        <li *ngFor="let stat of attackTypeStats" class="{{stat.type.toLowerCase()}}">
+          {{ stat.type }} <span class="count">{{ stat.count }}</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="legend">
+    <h3>Attack Types</h3>
+    <ul>
+      <li><span class="color-box dos"></span> DoS Attack</li>
+      <li><span class="color-box malware"></span> Malware</li>
+      <li><span class="color-box phishing"></span> Phishing</li>
+      <li><span class="color-box ransomware"></span> Ransomware</li>
+      <li><span class="color-box sql"></span> SQL Injection</li>
+    </ul>
+  </div>
+</div>
+
+<div class="attack-popup" *ngIf="popupData.show && popupData.position" [style.left.px]="popupData.position.x"
+  [style.top.px]="popupData.position.y">
+  <div class="header" [ngClass]="popupData.attack?.type?.toLowerCase() || ''">
+    <h3>{{ popupData.attack?.type }} Attack Detected</h3>
+  </div>
+  <div class="content">
+    <p><strong>Source:</strong> {{ popupData.attack?.source?.country }} ({{ popupData.attack?.source?.countryCode }})</p>
+    <p><strong>Target:</strong> {{ popupData.attack?.target?.country }} ({{ popupData.attack?.target?.countryCode }})</p>
+    <p><strong>Intensity:</strong> {{ popupData.attack?.intensity }} / 10</p>
+    <p><strong>Time:</strong> {{ popupData.attack?.timestamp | date:'medium' }}</p>
+  </div>
+</div>

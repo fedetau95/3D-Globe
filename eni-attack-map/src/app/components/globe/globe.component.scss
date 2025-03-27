@@ -1,0 +1,268 @@
+:host {
+  display: block;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  position: relative;
+  background: linear-gradient(to bottom, #000000, #061b2d);
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.controls {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  color: white;
+  font-family: 'Arial', sans-serif;
+  width: 300px;
+  z-index: 10;
+}
+
+.stats-panel {
+  background-color: rgba(0, 0, 0, 0.7);
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
+  backdrop-filter: blur(5px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  
+  h2 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 20px;
+    color: #00a8ff;
+    text-shadow: 0 0 5px rgba(0, 168, 255, 0.5);
+  }
+  
+  h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 16px;
+    color: #ffffff;
+  }
+  
+  ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0 0 15px 0;
+    max-height: 200px;
+    overflow-y: auto;
+    
+    &::-webkit-scrollbar {
+      width: 5px;
+    }
+    
+    &::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 5px;
+    }
+    
+    &::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 5px;
+    }
+    
+    li {
+      display: flex;
+      justify-content: space-between;
+      padding: 5px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      
+      &:last-child {
+        border-bottom: none;
+      }
+      
+      .count {
+        font-weight: bold;
+        color: #00a8ff;
+      }
+      
+      &.dos, &.dos .count {
+        color: #ff0000;
+      }
+      &.malware, &.malware .count {
+        color: #ff8800;
+      }
+      &.phishing, &.phishing .count {
+        color: #ffff00;
+      }
+      &.ransomware, &.ransomware .count {
+        color: #ff00ff;
+      }
+      &.sql, &.sql.injection, &.sql.injection .count {
+        color: #00ffff;
+      }
+    }
+  }
+  
+  .top-countries {
+    margin-bottom: 20px;
+  }
+}
+
+.legend {
+  background-color: rgba(0, 0, 0, 0.7);
+  border-radius: 8px;
+  padding: 15px;
+  backdrop-filter: blur(5px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  
+  h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 16px;
+    color: #ffffff;
+  }
+  
+  ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    
+    li {
+      display: flex;
+      align-items: center;
+      padding: 5px 0;
+      
+      .color-box {
+        width: 15px;
+        height: 15px;
+        margin-right: 10px;
+        border-radius: 3px;
+        box-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
+        
+        &.dos {
+          background-color: #ff0000;
+          box-shadow: 0 0 5px rgba(255, 0, 0, 0.5);
+        }
+        &.malware {
+          background-color: #ff8800;
+          box-shadow: 0 0 5px rgba(255, 136, 0, 0.5);
+        }
+        &.phishing {
+          background-color: #ffff00;
+          box-shadow: 0 0 5px rgba(255, 255, 0, 0.5);
+        }
+        &.ransomware {
+          background-color: #ff00ff;
+          box-shadow: 0 0 5px rgba(255, 0, 255, 0.5);
+        }
+        &.sql {
+          background-color: #00ffff;
+          box-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+        }
+      }
+    }
+  }
+}
+
+.attack-popup {
+  position: absolute;
+  width: 300px;
+  transform: translate(-50%, -100%) translateY(-20px);
+  background-color: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+  border-radius: 8px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+  color: white;
+  font-family: 'Arial', sans-serif;
+  overflow: hidden;
+  z-index: 10;
+  animation: popup-animation 0.5s ease-out;
+  
+  &:after {
+    content: '';
+    position: absolute;
+    bottom: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-top: 10px solid rgba(0, 0, 0, 0.8);
+  }
+  
+  .header {
+    padding: 10px 15px;
+    
+    &.dos { background-color: #ff0000; }
+    &.malware { background-color: #ff8800; }
+    &.phishing { background-color: #ffff00; color: #000; }
+    &.ransomware { background-color: #ff00ff; }
+    &.sql { background-color: #00ffff; color: #000; }
+    
+    h3 {
+      margin: 0;
+      font-size: 16px;
+      text-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+    }
+  }
+  
+  .content {
+    padding: 15px;
+    
+    p {
+      margin: 5px 0;
+      font-size: 14px;
+      
+      strong {
+        color: #00a8ff;
+      }
+    }
+  }
+}
+
+@keyframes popup-animation {
+  0% {
+    transform: translate(-50%, -80%) translateY(-20px);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(-50%, -100%) translateY(-20px);
+    opacity: 1;
+  }
+}
+
+// Responsive design
+@media (max-width: 768px) {
+  .controls {
+    width: 250px;
+  }
+  
+  .attack-popup {
+    width: 250px;
+  }
+}
+
+@media (max-width: 480px) {
+  .controls {
+    width: 200px;
+    font-size: 12px;
+    
+    h2 {
+      font-size: 16px;
+    }
+    
+    h3 {
+      font-size: 14px;
+    }
+  }
+  
+  .attack-popup {
+    width: 200px;
+    
+    .header h3 {
+      font-size: 14px;
+    }
+    
+    .content p {
+      font-size: 12px;
+    }
+  }
+}
