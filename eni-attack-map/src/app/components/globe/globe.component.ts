@@ -1,7 +1,7 @@
 import { Component, OnInit, AfterViewInit, ElementRef, ViewChild, OnDestroy, HostListener, Inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Subscription } from 'rxjs';
 import { AttackService, Attack, AttackType } from '../../services/attack.service';
 import { WorldDataService } from '../../services/world-data.service';
@@ -69,9 +69,9 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
   private subscriptions: Subscription[] = [];
 
   constructor(
-      @Inject(AttackService) private attackService: AttackService,
-      @Inject(WorldDataService) private worldDataService: WorldDataService
-    ) { }
+    private attackService: AttackService,
+    private worldDataService: WorldDataService
+  ) { }
 
   ngOnInit(): void {
     this.updateStats();
@@ -250,7 +250,7 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private subscribeToAttacks(): void {
     this.subscriptions.push(
-      this.attackService.getAttacks().subscribe((attack: { intensity: number; }) => {
+      this.attackService.getAttacks().subscribe((attack: Attack) => {
         this.createAttackVisualization(attack);
 
         // Per gli attacchi ad alta intensità, fai lo zoom automatico
@@ -476,7 +476,7 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     const attackStats = this.attackService.getAttackStats();
     this.attackTypeStats = [];
 
-    attackStats.forEach((count: any, type: any) => {
+    attackStats.forEach((count, type) => {
       this.attackTypeStats.push({ type, count });
     });
 
