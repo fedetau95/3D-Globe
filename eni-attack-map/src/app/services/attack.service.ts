@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Observable, Subject, interval } from 'rxjs';
-import { WorldDataService } from './world-data.service';
+import { WorldDataService } from './world-data.service'; 
+import { environment } from '../../environment';
 
 export interface Attack {
   id: string;
@@ -21,8 +22,6 @@ export interface Attack {
   timestamp: Date;
 }
 
-export type AttackType = 'DoS' | 'Malware' | 'Phishing' | 'Ransomware' | 'SQL Injection';
-
 @Injectable({
   providedIn: 'root'
 })
@@ -31,8 +30,8 @@ export class AttackService {
   private activeAttacks: Map<string, Attack> = new Map();
   private nextAttackId = 1;
   
-  // Statistiche sugli attacchi per tipo
-  private attackStats: Map<AttackType, number> = new Map([
+  // Statistics on attacks by type
+  private attackStats: Map<string, number> = new Map([
     ['DoS', 61069],
     ['Malware', 73765],
     ['Phishing', 11545],
@@ -40,7 +39,7 @@ export class AttackService {
     ['SQL Injection', 2319]
   ]);
   
-  // Coordinate geografiche di alcuni paesi principali
+  // Geographic coordinates of major countries
   private countryCoordinates: { [key: string]: { lat: number, lng: number } } = {
     'US': { lat: 37.0902, lng: -95.7129 },
     'RU': { lat: 61.524, lng: 105.3188 },
@@ -60,39 +59,41 @@ export class AttackService {
   };
   
   constructor(private worldDataService: WorldDataService) {
-    // Simulazione di attacchi periodici
+    // Start periodic attack simulation
     this.startAttackSimulation();
   }
 
-  // Ottiene lo stream di attacchi come Observable
+  // Get attack stream as Observable
   getAttacks(): Observable<Attack> {
     return this.attackSubject.asObservable();
   }
   
-  // Ottiene gli attacchi attivi
+  // Get active attacks
   getActiveAttacks(): Map<string, Attack> {
     return this.activeAttacks;
   }
   
-  // Ottiene le statistiche sugli attacchi per tipo
-  getAttackStats(): Map<AttackType, number> {
+  // Get attack statistics by type
+  getAttackStats(): Map<string, number> {
     return this.attackStats;
   }
   
-  // Incrementa le statistiche di un tipo di attacco
-  incrementAttackStat(type: AttackType): void {
+  // Increment statistics for an attack type
+  incrementAttackStat(type: string): void {
     const currentValue = this.attackStats.get(type) || 0;
     this.attackStats.set(type, currentValue + 1);
   }
 
-  // Genera un nuovo attacco e lo emette
+  // Generate a new attack and emit it
   generateAttack(): Attack {
-    const attackTypes: AttackType[] = ['DoS', 'Malware', 'Phishing', 'Ransomware', 'SQL Injection'];
+    const attackTypes = environment.attacks.types;
     const countryCodes = Object.keys(this.countryCoordinates);
     
-    // Seleziona paesi di origine e destinazione casuali
+    // Select random source and target countries
     const sourceIdx = Math.floor(Math.random() * countryCodes.length);
     let targetIdx = Math.floor(Math.random() * countryCodes.length);
+    
+    // Ensure target is different from source
     while (targetIdx === sourceIdx) {
       targetIdx = Math.floor(Math.random() * countryCodes.length);
     }
@@ -102,12 +103,13 @@ export class AttackService {
     const sourceCoord = this.countryCoordinates[sourceCountry];
     const targetCoord = this.countryCoordinates[targetCountry];
     
-    // Seleziona un tipo di attacco casuale
+    // Select random attack type
     const attackType = attackTypes[Math.floor(Math.random() * attackTypes.length)];
     
-    // Genera un'intensità casuale (1-10)
-    const intensity = Math.floor(Math.random() * 10) + 1;
+    // Generate random intensity (1-10)
+    const intensity = Math.floor(Math.random() * environment.attacks.maxIntensity) + 1;
     
+    // Create attack object
     const attack: Attack = {
       id: `attack-${this.nextAttackId++}`,
       source: {
@@ -127,36 +129,36 @@ export class AttackService {
       timestamp: new Date()
     };
     
-    // Aggiorna le statistiche
+    // Update statistics
     this.incrementAttackStat(attackType);
     this.worldDataService.updateCountryStats(sourceCountry, targetCountry);
     
-    // Aggiungi l'attacco alla mappa degli attacchi attivi
+    // Add attack to active attacks map
     this.activeAttacks.set(attack.id, attack);
     
-    // Dopo un periodo, rimuovi l'attacco dalla mappa
+    // Remove attack after a period
     setTimeout(() => {
       this.activeAttacks.delete(attack.id);
-    }, 10000 + Math.random() * 5000); // Durata casuale tra 10-15 secondi
+    }, environment.attacks.lifetime + Math.random() * 5000);
     
-    // Emetti l'attacco
+    // Emit attack event
     this.attackSubject.next(attack);
     
     return attack;
   }
   
-  // Avvia la simulazione di attacchi periodici
+  // Start periodic attack simulation
   startAttackSimulation(): void {
-    // Genera attacchi con frequenza variabile (1-5 secondi)
-    interval(1000).subscribe(() => {
-      // Probabilità variabile di generare un attacco
-      if (Math.random() < 0.7) { // 70% di probabilità di generare un attacco ogni secondo
+    // Generate attacks with variable frequency
+    interval(environment.attacks.simulationInterval).subscribe(() => {
+      // Variable probability of generating an attack
+      if (Math.random() < environment.attacks.attackProbability) {
         this.generateAttack();
       }
     });
   }
   
-  // Ottiene il nome del paese dal codice
+  // Get country name from country code
   private getCountryNameFromCode(code: string): string {
     const countryNames: { [key: string]: string } = {
       'US': 'United States',

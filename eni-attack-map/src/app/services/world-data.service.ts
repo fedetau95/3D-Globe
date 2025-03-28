@@ -2,18 +2,18 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
-import * as THREE from 'three';
+import { environment } from '../../environment';
 
 @Injectable({
   providedIn: 'root'
 })
 export class WorldDataService {
-  private worldDataUrl = 'assets/data/world.json';
+  private worldDataUrl = environment.assetsPath.data.world;
   
-  // Cache dei dati dei paesi
+  // Cache for country data
   private countriesData: any = null;
   
-  // Statistiche per paese
+  // Country statistics
   private countryStatistics: Map<string, { 
     attacks: number,
     attacksReceived: number,
@@ -21,11 +21,11 @@ export class WorldDataService {
   }> = new Map();
 
   constructor(private http: HttpClient) {
-    // Inizializza alcune statistiche di esempio
+    // Initialize with sample statistics
     this.initializeCountryStats();
   }
 
-  // Carica i dati geografici del mondo
+  // Load world geographical data
   getWorldData(): Observable<any> {
     if (this.countriesData) {
       return of(this.countriesData);
@@ -43,7 +43,7 @@ export class WorldDataService {
     );
   }
 
-  // Ottiene le statistiche di un paese
+  // Get statistics for a country
   getCountryStatistics(countryCode: string): any {
     return this.countryStatistics.get(countryCode) || { 
       attacks: 0, 
@@ -52,7 +52,7 @@ export class WorldDataService {
     };
   }
 
-  // Ottiene le statistiche di tutti i paesi, ordinate per numero di attacchi
+  // Get top attacked countries sorted by number of attacks
   getTopAttackedCountries(limit: number = 10): Array<{ 
     code: string, 
     name: string, 
@@ -73,9 +73,9 @@ export class WorldDataService {
       .slice(0, limit);
   }
 
-  // Aggiorna le statistiche quando viene rilevato un nuovo attacco
+  // Update statistics when a new attack is detected
   updateCountryStats(sourceCountry: string, targetCountry: string): void {
-    // Statistiche paese di origine
+    // Update source country stats
     const sourceStats = this.countryStatistics.get(sourceCountry) || { 
       attacks: 0, 
       attacksReceived: 0, 
@@ -85,7 +85,7 @@ export class WorldDataService {
     sourceStats.attacksSent++;
     this.countryStatistics.set(sourceCountry, sourceStats);
     
-    // Statistiche paese di destinazione
+    // Update target country stats
     const targetStats = this.countryStatistics.get(targetCountry) || { 
       attacks: 0, 
       attacksReceived: 0, 
@@ -96,7 +96,7 @@ export class WorldDataService {
     this.countryStatistics.set(targetCountry, targetStats);
   }
 
-  // Ottiene il nome del paese dal codice
+  // Get country name from country code
   private getCountryNameFromCode(code: string): string {
     const countryNames: { [key: string]: string } = {
       'US': 'United States',
@@ -119,7 +119,7 @@ export class WorldDataService {
     return countryNames[code] || code;
   }
 
-  // Inizializza le statistiche con dati di esempio
+  // Initialize with sample statistics
   private initializeCountryStats(): void {
     this.countryStatistics.set('US', { attacks: 125000, attacksReceived: 85634, attacksSent: 39366 });
     this.countryStatistics.set('RU', { attacks: 98000, attacksReceived: 73765, attacksSent: 24235 });

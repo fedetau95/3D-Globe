@@ -17,19 +17,19 @@ export const environment = {
   },
   attacks: {
     simulationInterval: 1000, // ms
-    attackProbability: 0.7, // 70% chance per interval
+    attackProbability: 0.7,   // 70% chance per interval
     maxIntensity: 10,
-    lifetime: 10000, // ms
+    lifetime: 10000,          // ms
     types: ['DoS', 'Malware', 'Phishing', 'Ransomware', 'SQL Injection'],
   },
   zoom: {
     minDistance: 120,
     maxDistance: 300,
-    duration: 1.5, // seconds
-    resetDelay: 5000, // ms
+    duration: 1.5,           // seconds
+    resetDelay: 5000,        // ms
   },
   popup: {
-    duration: 5000, // ms
-    intensityThreshold: 7, // show popup for attacks with intensity >= this value
+    duration: 5000,          // ms
+    intensityThreshold: 7,   // show popup for attacks with intensity >= this value
   }
 };

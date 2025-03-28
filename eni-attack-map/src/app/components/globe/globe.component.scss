@@ -1,76 +1,58 @@
 :host {
   display: block;
   width: 100%;
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
   position: relative;
-  background: linear-gradient(to bottom, #000000, #061b2d);
 }
 
 canvas {
   display: block;
   width: 100%;
   height: 100%;
+  background-color: #000;
 }
 
 .controls {
   position: absolute;
-  top: 20px;
-  right: 20px;
+  top: 1rem;
+  right: 1rem;
+  width: 300px;
   color: white;
   font-family: 'Arial', sans-serif;
-  width: 300px;
-  z-index: 10;
+  z-index: 100;
 }
 
 .stats-panel {
   background-color: rgba(0, 0, 0, 0.7);
   border-radius: 8px;
-  padding: 15px;
-  margin-bottom: 20px;
-  backdrop-filter: blur(5px);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  padding: 1rem;
+  margin-bottom: 1rem;
   
   h2 {
     margin-top: 0;
-    margin-bottom: 15px;
-    font-size: 20px;
-    color: #00a8ff;
-    text-shadow: 0 0 5px rgba(0, 168, 255, 0.5);
+    font-size: 1.2rem;
+    color: #fff;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    padding-bottom: 0.5rem;
   }
   
   h3 {
-    margin-top: 0;
-    margin-bottom: 10px;
-    font-size: 16px;
-    color: #ffffff;
+    font-size: 1rem;
+    margin: 0.5rem 0;
+    color: #ccc;
   }
   
   ul {
-    list-style-type: none;
+    list-style: none;
     padding: 0;
-    margin: 0 0 15px 0;
-    max-height: 200px;
-    overflow-y: auto;
-    
-    &::-webkit-scrollbar {
-      width: 5px;
-    }
-    
-    &::-webkit-scrollbar-track {
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 5px;
-    }
-    
-    &::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.3);
-      border-radius: 5px;
-    }
+    margin: 0 0 1rem 0;
     
     li {
       display: flex;
       justify-content: space-between;
-      padding: 5px 0;
+      padding: 0.3rem 0;
+      font-size: 0.9rem;
       border-bottom: 1px solid rgba(255, 255, 255, 0.1);
       
       &:last-child {
@@ -79,101 +61,90 @@ canvas {
       
       .count {
         font-weight: bold;
-        color: #00a8ff;
+        color: #4fc3f7;
       }
       
-      &.dos, &.dos .count {
-        color: #ff0000;
+      // Colors for attack types
+      &.dos {
+        color: #ff5252;
+        .count { color: #ff5252; }
       }
-      &.malware, &.malware .count {
-        color: #ff8800;
+      
+      &.malware {
+        color: #ff9800;
+        .count { color: #ff9800; }
       }
-      &.phishing, &.phishing .count {
-        color: #ffff00;
+      
+      &.phishing {
+        color: #ffeb3b;
+        .count { color: #ffeb3b; }
       }
-      &.ransomware, &.ransomware .count {
-        color: #ff00ff;
+      
+      &.ransomware {
+        color: #e040fb;
+        .count { color: #e040fb; }
       }
-      &.sql, &.sql.injection, &.sql.injection .count {
-        color: #00ffff;
+      
+      &.sql {
+        color: #18ffff;
+        .count { color: #18ffff; }
       }
     }
-  }
-  
-  .top-countries {
-    margin-bottom: 20px;
   }
 }
 
 .legend {
   background-color: rgba(0, 0, 0, 0.7);
   border-radius: 8px;
-  padding: 15px;
-  backdrop-filter: blur(5px);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  padding: 1rem;
   
   h3 {
-    margin-top: 0;
-    margin-bottom: 10px;
-    font-size: 16px;
-    color: #ffffff;
+    font-size: 1rem;
+    margin: 0 0 0.5rem 0;
+    color: #ccc;
   }
   
   ul {
-    list-style-type: none;
+    list-style: none;
     padding: 0;
     margin: 0;
     
     li {
       display: flex;
       align-items: center;
-      padding: 5px 0;
+      padding: 0.2rem 0;
+      font-size: 0.9rem;
       
       .color-box {
-        width: 15px;
-        height: 15px;
-        margin-right: 10px;
-        border-radius: 3px;
-        box-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
-        
-        &.dos {
-          background-color: #ff0000;
-          box-shadow: 0 0 5px rgba(255, 0, 0, 0.5);
-        }
-        &.malware {
-          background-color: #ff8800;
-          box-shadow: 0 0 5px rgba(255, 136, 0, 0.5);
-        }
-        &.phishing {
-          background-color: #ffff00;
-          box-shadow: 0 0 5px rgba(255, 255, 0, 0.5);
-        }
-        &.ransomware {
-          background-color: #ff00ff;
-          box-shadow: 0 0 5px rgba(255, 0, 255, 0.5);
-        }
-        &.sql {
-          background-color: #00ffff;
-          box-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
-        }
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        margin-right: 8px;
+        border-radius: 2px;
       }
+      
+      .dos { background-color: #ff0000; }
+      .malware { background-color: #ff8800; }
+      .phishing { background-color: #ffff00; }
+      .ransomware { background-color: #ff00ff; }
+      .sql { background-color: #00ffff; }
     }
   }
 }
 
 .attack-popup {
   position: absolute;
-  width: 300px;
-  transform: translate(-50%, -100%) translateY(-20px);
-  background-color: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(10px);
+  width: 280px;
+  background-color: rgba(0, 0, 0, 0.85);
   border-radius: 8px;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
   color: white;
   font-family: 'Arial', sans-serif;
   overflow: hidden;
-  z-index: 10;
-  animation: popup-animation 0.5s ease-out;
+  z-index: 200;
+  transform: translate(-50%, -100%);
+  margin-top: -20px;
+  animation: popup-fade 0.3s ease-out;
   
   &:after {
     content: '';
@@ -185,84 +156,65 @@ canvas {
     height: 0;
     border-left: 10px solid transparent;
     border-right: 10px solid transparent;
-    border-top: 10px solid rgba(0, 0, 0, 0.8);
+    border-top: 10px solid rgba(0, 0, 0, 0.85);
   }
   
   .header {
-    padding: 10px 15px;
-    
-    &.dos { background-color: #ff0000; }
-    &.malware { background-color: #ff8800; }
-    &.phishing { background-color: #ffff00; color: #000; }
-    &.ransomware { background-color: #ff00ff; }
-    &.sql { background-color: #00ffff; color: #000; }
+    padding: 0.6rem 1rem;
     
     h3 {
       margin: 0;
-      font-size: 16px;
-      text-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+      font-size: 1rem;
+    }
+    
+    // Header colors for different attack types
+    &.dos { 
+      background-color: #ff0000;
+      color: white;
+    }
+    
+    &.malware { 
+      background-color: #ff8800;
+      color: black;
+    }
+    
+    &.phishing { 
+      background-color: #ffff00;
+      color: black;
+    }
+    
+    &.ransomware { 
+      background-color: #ff00ff;
+      color: white;
+    }
+    
+    &.sql { 
+      background-color: #00ffff;
+      color: black;
     }
   }
   
   .content {
-    padding: 15px;
+    padding: 0.8rem 1rem;
     
     p {
-      margin: 5px 0;
-      font-size: 14px;
+      margin: 0.3rem 0;
+      font-size: 0.9rem;
       
       strong {
-        color: #00a8ff;
+        color: #4fc3f7;
       }
     }
   }
 }
 
-@keyframes popup-animation {
+@keyframes popup-fade {
   0% {
-    transform: translate(-50%, -80%) translateY(-20px);
     opacity: 0;
+    transform: translate(-50%, -90%);
   }
   100% {
-    transform: translate(-50%, -100%) translateY(-20px);
     opacity: 1;
-  }
-}
-
-// Responsive design
-@media (max-width: 768px) {
-  .controls {
-    width: 250px;
-  }
-  
-  .attack-popup {
-    width: 250px;
-  }
-}
-
-@media (max-width: 480px) {
-  .controls {
-    width: 200px;
-    font-size: 12px;
-    
-    h2 {
-      font-size: 16px;
-    }
-    
-    h3 {
-      font-size: 14px;
-    }
-  }
-  
-  .attack-popup {
-    width: 200px;
-    
-    .header h3 {
-      font-size: 14px;
-    }
-    
-    .content p {
-      font-size: 12px;
-    }
+    transform: translate(-50%, -100%);
   }
 }

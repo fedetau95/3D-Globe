@@ -1,16 +1,18 @@
-import { Component, OnInit, AfterViewInit, ElementRef, ViewChild, OnDestroy, HostListener, Inject } from '@angular/core';
+import { Component, OnInit, AfterViewInit, ElementRef, ViewChild, OnDestroy, HostListener, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Subscription } from 'rxjs';
-import { AttackService, Attack, AttackType } from '../../services/attack.service';
+import { Attack, AttackService } from '../../services/attack.service';
 import { WorldDataService } from '../../services/world-data.service';
+import { environment } from '../../../environment';
 
 interface AttackVisual {
   line: THREE.Line;
   particles: THREE.Points;
   startTime: number;
   attack: Attack;
+  lifetime: number;
 }
 
 interface PopupData {
@@ -27,50 +29,59 @@ interface PopupData {
   styleUrls: ['./globe.component.scss']
 })
 export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
-  @ViewChild('globeCanvas') private canvasRef!: ElementRef;
+  @ViewChild('globeCanvas') private canvasRef!: ElementRef<HTMLCanvasElement>;
 
+  // Three.js objects
   private scene!: THREE.Scene;
   private camera!: THREE.PerspectiveCamera;
   private renderer!: THREE.WebGLRenderer;
   private globe!: THREE.Mesh;
   private controls!: OrbitControls;
+  private clock = new THREE.Clock();
+
+  // Globe parameters
+  private radius = environment.globe.radius;
+  private segments = environment.globe.segments;
+  private rotationSpeed = environment.globe.rotationSpeed;
+
+  // Visual effects
   private activeAttacks: Map<string, AttackVisual> = new Map();
+  private attackColors: Record<string, THREE.Color> = {
+    'DoS': new THREE.Color(0xff0000),        // Red
+    'Malware': new THREE.Color(0xff8800),    // Orange
+    'Phishing': new THREE.Color(0xffff00),   // Yellow
+    'Ransomware': new THREE.Color(0xff00ff), // Magenta
+    'SQL Injection': new THREE.Color(0x00ffff) // Cyan
+  };
 
-  // Modello 3D del globo
-  private radius = 100;
-  private segments = 64;
+  // Animation and rendering
+  private animationFrameId: number = 0;
 
-  // Animazione e rendering
-  private animationFrame: number = 0;
-  private lastTime: number = 0;
-
-  // Zoom dinamico
+  // Camera animation
   private targetZoom: { position: THREE.Vector3, lookAt: THREE.Vector3 } | null = null;
-  private zoomDuration = 1.5; // secondi
+  private zoomDuration = environment.zoom.duration;
   private zoomStartTime = 0;
   private initialCameraPosition = new THREE.Vector3();
   private initialCameraLookAt = new THREE.Vector3();
 
-  // Popup informativo sugli attacchi
+  // Popup for attack information
   popupData: PopupData = {
     show: false,
     attack: null,
     position: null
   };
 
-  // Statistiche sugli attacchi
+  // Statistics data
   topAttackedCountries: Array<{ code: string, name: string, attacks: number }> = [];
-  attackTypeStats: { type: AttackType, count: number }[] = [];
-
-  // Flag per il debug
-  private debugMode = false;
+  attackTypeStats: Array<{ type: string, count: number }> = [];
 
   // Subscriptions
   private subscriptions: Subscription[] = [];
 
   constructor(
     private attackService: AttackService,
-    private worldDataService: WorldDataService
+    private worldDataService: WorldDataService,
+    private ngZone: NgZone
   ) { }
 
   ngOnInit(): void {
@@ -78,24 +89,48 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngAfterViewInit(): void {
+    // Initialize the 3D scene
     this.initScene();
     this.setupRenderer();
     this.createGlobe();
-    this.setupControls();
     this.setupLights();
-    this.subscribeToAttacks();
-    this.animate(0);
+    this.setupControls();
 
-    // Aggiorna le statistiche ogni 5 secondi
-    setInterval(() => this.updateStats(), 5000);
+    // Set up data subscription
+    this.subscribeToAttacks();
+
+    // Start animation loop
+    this.ngZone.runOutsideAngular(() => this.animate());
+
+    // Update statistics periodically
+    setInterval(() => {
+      this.ngZone.run(() => this.updateStats());
+    }, 5000);
+    // Aggiungi punti di riferimento nella scena
+    const addDebugMarker = (lat: number, lng: number, color: number) => {
+      const marker = new THREE.Mesh(
+        new THREE.SphereGeometry(1),
+        new THREE.MeshBasicMaterial({ color })
+      );
+      marker.position.copy(this.latLongToVector3(lat, lng, this.radius));
+      this.globe.add(marker);
+    }
+
+    // Esempio: Marker rosso a Roma
+    addDebugMarker(41.9028, 12.4964, 0xff0000);
   }
 
   ngOnDestroy(): void {
-    if (this.animationFrame) {
-      cancelAnimationFrame(this.animationFrame);
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId);
     }
+
+    // Clean up subscriptions
     this.subscriptions.forEach(sub => sub.unsubscribe());
+
+    // Dispose Three.js resources
     this.renderer.dispose();
+    this.scene.clear();
   }
 
   @HostListener('window:resize')
@@ -107,66 +142,66 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  @HostListener('document:keydown.d')
-  toggleDebug(): void {
-    this.debugMode = !this.debugMode;
-    console.log(`Debug mode: ${this.debugMode ? 'enabled' : 'disabled'}`);
-  }
-
   private initScene(): void {
+    // Create Three.js scene
     this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0x000000);
 
     // Set up camera
     this.camera = new THREE.PerspectiveCamera(
-      60, // FOV
-      window.innerWidth / window.innerHeight, // Aspect ratio
-      0.1, // Near clipping plane
-      1000 // Far clipping plane
+      60,  // Field of view
+      window.innerWidth / window.innerHeight,  // Aspect ratio
+      0.1,  // Near clipping plane
+      1000  // Far clipping plane
     );
+
+    // Set initial camera position
     this.camera.position.z = 200;
     this.initialCameraPosition.copy(this.camera.position);
     this.initialCameraLookAt.set(0, 0, 0);
   }
 
   private setupRenderer(): void {
+    // Create WebGL renderer
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvasRef.nativeElement,
       antialias: true,
       alpha: true
     });
 
+    // Configure renderer
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(window.devicePixelRatio);
+    this.renderer.shadowMap.enabled = true;
   }
 
   private setupLights(): void {
-    // Add ambient light
+    // Ambient light for base illumination
     const ambientLight = new THREE.AmbientLight(0x404040, 1);
     this.scene.add(ambientLight);
 
-    // Add directional light
+    // Directional light for sunlight effect
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
     directionalLight.position.set(1, 1, 1).normalize();
     this.scene.add(directionalLight);
 
-    // Add point light
+    // Point light for highlight
     const pointLight = new THREE.PointLight(0xffffff, 0.5);
     pointLight.position.set(50, 50, 50);
     this.scene.add(pointLight);
   }
 
   private createGlobe(): void {
-    // Create the globe geometry
+    // Create sphere geometry for Earth
     const geometry = new THREE.SphereGeometry(this.radius, this.segments, this.segments);
 
-    // Load Earth texture
+    // Load Earth textures
     const textureLoader = new THREE.TextureLoader();
+    const earthTexture = textureLoader.load(environment.assetsPath.textures.earth);
+    const bumpMap = textureLoader.load(environment.assetsPath.textures.bump);
+    const specularMap = textureLoader.load(environment.assetsPath.textures.specular);
 
-    // Earth texture - you'll need to add earth texture images to your assets
-    const earthTexture = textureLoader.load('assets/images/earth_texture.jpg');
-    const bumpMap = textureLoader.load('assets/images/earth_bump.jpg');
-    const specularMap = textureLoader.load('assets/images/earth_specular.jpg');
-
+    // Create material with textures
     const material = new THREE.MeshPhongMaterial({
       map: earthTexture,
       bumpMap: bumpMap,
@@ -176,17 +211,17 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       shininess: 5
     });
 
+    // Create globe mesh and add to scene
     this.globe = new THREE.Mesh(geometry, material);
     this.scene.add(this.globe);
 
-    // Add a glow effect
+    // Add atmospheric and glow effects
     this.addGlowEffect();
-
-    // Add atmosphere effect
     this.addAtmosphere();
   }
 
   private addGlowEffect(): void {
+    // Create glow effect using shader material
     const glowGeometry = new THREE.SphereGeometry(this.radius + 2, this.segments, this.segments);
     const glowMaterial = new THREE.ShaderMaterial({
       uniforms: {
@@ -225,7 +260,7 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private addAtmosphere(): void {
-    // Atmosphere is a thin layer of blue around the earth
+    // Add thin blue atmosphere layer
     const atmosphereGeometry = new THREE.SphereGeometry(this.radius + 1, this.segments, this.segments);
     const atmosphereMaterial = new THREE.MeshBasicMaterial({
       color: 0x0077ff,
@@ -239,22 +274,27 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private setupControls(): void {
+    // Create orbit controls for camera movement
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+
+    // Configure controls
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.05;
     this.controls.rotateSpeed = 0.5;
-    this.controls.minDistance = 120;
-    this.controls.maxDistance = 300;
+    this.controls.minDistance = environment.zoom.minDistance;
+    this.controls.maxDistance = environment.zoom.maxDistance;
     this.controls.enablePan = false;
   }
 
   private subscribeToAttacks(): void {
+    // Subscribe to attack stream
     this.subscriptions.push(
-      this.attackService.getAttacks().subscribe((attack: Attack) => {
+      this.attackService.getAttacks().subscribe(attack => {
+        // Create visual representation of attack
         this.createAttackVisualization(attack);
 
-        // Per gli attacchi ad alta intensità, fai lo zoom automatico
-        if (attack.intensity >= 8) {
+        // For high-intensity attacks, trigger zoom
+        if (attack.intensity >= environment.popup.intensityThreshold) {
           this.zoomToAttack(attack);
         }
       })
@@ -262,9 +302,11 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private latLongToVector3(lat: number, lon: number, radius: number): THREE.Vector3 {
+    // Convert latitude and longitude to 3D position
     const phi = (90 - lat) * Math.PI / 180;
     const theta = (lon + 180) * Math.PI / 180;
 
+    // Calculate coordinates
     const x = -radius * Math.sin(phi) * Math.cos(theta);
     const y = radius * Math.cos(phi);
     const z = radius * Math.sin(phi) * Math.sin(theta);
@@ -286,22 +328,25 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       this.radius
     );
 
-    // Create a curve from source to target, extending above the surface
+    // Create a curved path from source to target
     const midPoint = new THREE.Vector3().addVectors(sourcePos, targetPos).multiplyScalar(0.5);
     const distance = sourcePos.distanceTo(targetPos);
     const altitude = this.radius * 0.3 + (distance / 100) + (attack.intensity * 0.5);
 
+    // Adjust midpoint for curve height
     midPoint.normalize().multiplyScalar(this.radius + altitude);
 
+    // Create quadratic curve
     const curve = new THREE.QuadraticBezierCurve3(sourcePos, midPoint, targetPos);
 
-    // Create line geometry
+    // Create line geometry following the curve
     const points = curve.getPoints(50);
     const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
 
-    // Different colors for different attack types
+    // Get color based on attack type
     const color = this.getColorForAttackType(attack.type);
 
+    // Create line material
     const lineMaterial = new THREE.LineBasicMaterial({
       color: color,
       transparent: true,
@@ -309,13 +354,15 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       linewidth: 1 + attack.intensity / 2 // Thicker for more intense attacks
     });
 
+    // Create line mesh
     const line = new THREE.Line(lineGeometry, lineMaterial);
     this.scene.add(line);
 
-    // Create particles along the line
+    // Create particles to flow along the line
     const particleGeometry = new THREE.BufferGeometry();
     const particlePositions = new Float32Array(50 * 3);
 
+    // Set initial particle positions along the curve
     for (let i = 0; i < 50; i++) {
       const point = curve.getPoint(i / 49);
       particlePositions[i * 3] = point.x;
@@ -325,6 +372,7 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
 
     particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
 
+    // Create particle material
     const particleMaterial = new THREE.PointsMaterial({
       color: color,
       size: 1.5 + (attack.intensity * 0.1),
@@ -333,6 +381,7 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       blending: THREE.AdditiveBlending
     });
 
+    // Create particle system
     const particles = new THREE.Points(particleGeometry, particleMaterial);
     this.scene.add(particles);
 
@@ -341,30 +390,18 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       line,
       particles,
       startTime: Date.now(),
-      attack
+      attack,
+      lifetime: 10000 + (attack.intensity * 500) // Lifetime based on intensity
     });
 
     // Show popup for high-intensity attacks
-    if (attack.intensity >= 7) {
+    if (attack.intensity >= environment.popup.intensityThreshold) {
       this.showPopup(attack);
     }
   }
 
   private getColorForAttackType(type: string): THREE.Color {
-    switch (type) {
-      case 'DoS':
-        return new THREE.Color(0xff0000); // Red
-      case 'Malware':
-        return new THREE.Color(0xff8800); // Orange
-      case 'Phishing':
-        return new THREE.Color(0xffff00); // Yellow
-      case 'Ransomware':
-        return new THREE.Color(0xff00ff); // Magenta
-      case 'SQL Injection':
-        return new THREE.Color(0x00ffff); // Cyan
-      default:
-        return new THREE.Color(0x00ff00); // Green
-    }
+    return this.attackColors[type] || new THREE.Color(0x00ff00); // Default to green if type unknown
   }
 
   private zoomToAttack(attack: Attack): void {
@@ -404,26 +441,26 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       this.controls.target.copy(this.targetZoom.lookAt);
       this.targetZoom = null;
 
-      // After 5 seconds, return to the original view
+      // After delay, return to original view
       setTimeout(() => {
         this.resetZoom();
-      }, 5000);
+      }, environment.zoom.resetDelay);
 
       return;
     }
 
-    // Interpola tra la posizione iniziale e quella target
+    // Interpolate between initial and target positions
     const t = elapsedTime / this.zoomDuration;
     const smoothT = this.easeInOutCubic(t);
 
-    // Interpola posizione della camera
+    // Update camera position
     this.camera.position.lerpVectors(
       this.initialCameraPosition,
       this.targetZoom.position,
       smoothT
     );
 
-    // Interpola punto di osservazione
+    // Update look-at point
     this.controls.target.lerpVectors(
       this.initialCameraLookAt,
       this.targetZoom.lookAt,
@@ -432,47 +469,49 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private resetZoom(): void {
-    // Imposta il target per tornare alla vista originale
+    // Set target to return to original view
     this.targetZoom = {
       position: new THREE.Vector3(0, 0, 200),
       lookAt: new THREE.Vector3(0, 0, 0)
     };
 
-    // Salva la posizione corrente per l'interpolazione
+    // Save current position for interpolation
     this.initialCameraPosition.copy(this.camera.position);
     this.initialCameraLookAt.copy(this.controls.target);
 
-    // Avvia l'animazione di ritorno
+    // Start zoom animation
     this.zoomStartTime = Date.now();
   }
 
-  // Funzione di easing per animazioni fluide
+  // Easing function for smooth animations
   private easeInOutCubic(t: number): number {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   }
 
   private showPopup(attack: Attack): void {
-    // Mostra il popup con le informazioni sull'attacco
-    this.popupData = {
-      show: true,
-      attack: attack,
-      position: null // La posizione verrà calcolata nella prossima frame
-    };
+    // Update popup data in Angular zone to trigger change detection
+    this.ngZone.run(() => {
+      this.popupData = {
+        show: true,
+        attack: attack,
+        position: null // Position will be calculated in the next frame
+      };
 
-    // Dopo 5 secondi, nascondi il popup
-    setTimeout(() => {
-      if (this.popupData.attack === attack) {
-        this.popupData.show = false;
-      }
-    }, 5000);
+      // Hide popup after timeout
+      setTimeout(() => {
+        if (this.popupData.attack === attack) {
+          this.popupData.show = false;
+        }
+      }, environment.popup.duration);
+    });
   }
 
-  // Aggiorna le statistiche visualizzate
+  // Update statistics displayed in the UI
   private updateStats(): void {
-    // Ottieni i paesi più attaccati
+    // Get most attacked countries
     this.topAttackedCountries = this.worldDataService.getTopAttackedCountries(10);
 
-    // Ottieni le statistiche per tipo di attacco
+    // Get statistics by attack type
     const attackStats = this.attackService.getAttackStats();
     this.attackTypeStats = [];
 
@@ -480,65 +519,65 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       this.attackTypeStats.push({ type, count });
     });
 
-    // Ordina per conteggio decrescente
+    // Sort by count in descending order
     this.attackTypeStats.sort((a, b) => b.count - a.count);
   }
 
-  private animate(time: number): void {
-    this.animationFrame = requestAnimationFrame((t) => this.animate(t));
+  private animate(): void {
+    this.animationFrameId = requestAnimationFrame(() => this.animate());
 
-    const deltaTime = time - this.lastTime;
-    this.lastTime = time;
+    const delta = this.clock.getDelta();
 
-    // Aggiorna lo zoom dinamico
+    // Update dynamic zoom
     this.updateZoom();
 
-    // Ruota lentamente il globo
-    this.globe.rotation.y += 0.0005;
+    // Rotate globe slowly
+    this.globe.rotation.y += this.rotationSpeed;
 
-    // Aggiorna i controlli orbitali
+    // Update orbital controls
     this.controls.update();
 
-    // Gestisci gli attacchi attivi
+    // Handle active attacks
     const now = Date.now();
-    this.activeAttacks.forEach((attackVisual, id) => {
+    this.activeAttacks.forEach((attackVisual, id) => { 
       const age = now - attackVisual.startTime;
 
-      // Se l'attacco è troppo vecchio, rimuovilo
-      if (age > 10000) { // 10 secondi di vita
+      // Remove expired attacks
+      if (age > attackVisual.lifetime) {
         this.scene.remove(attackVisual.line);
         this.scene.remove(attackVisual.particles);
         this.activeAttacks.delete(id);
         return;
       }
 
-      // Anima le particelle lungo la linea
+      // Animate particles along the line
       const positions = (attackVisual.particles.geometry as THREE.BufferGeometry).attributes['position'].array;
       const particleCount = positions.length / 3;
 
-      // Velocità di movimento proporzionale all'intensità dell'attacco
+      // Movement speed proportional to attack intensity
       const speed = 0.1 + (attackVisual.attack.intensity * 0.05);
 
-      // Muovi le particelle lungo la linea
+      // Move particles along the line
       for (let i = 0; i < particleCount - 1; i++) {
         positions[i * 3] = positions[(i + 1) * 3];
         positions[i * 3 + 1] = positions[(i + 1) * 3 + 1];
         positions[i * 3 + 2] = positions[(i + 1) * 3 + 2];
       }
 
-      // Effetto blink per attacchi ad alta intensità
-      if (attackVisual.attack.intensity >= 7) {
-        const blinkFrequency = 100 + (10 - attackVisual.attack.intensity) * 50; // più intenso = lampeggio più veloce
+      // Blink effect for high-intensity attacks
+      if (attackVisual.attack.intensity >= environment.popup.intensityThreshold) {
+        const blinkFrequency = 100 + (10 - attackVisual.attack.intensity) * 50; // Higher intensity = faster blinking
         const blink = Math.sin(age / blinkFrequency) > 0;
 
         (attackVisual.line.material as THREE.LineBasicMaterial).opacity = blink ? 1 : 0.3;
         (attackVisual.particles.material as THREE.PointsMaterial).opacity = blink ? 1 : 0.3;
       }
 
+      // Update geometry
       (attackVisual.particles.geometry as THREE.BufferGeometry).attributes['position'].needsUpdate = true;
     });
 
-    // Calcola la posizione dello schermo per il popup
+    // Calculate screen position for popup
     if (this.popupData.show && this.popupData.attack) {
       const targetPos = this.latLongToVector3(
         this.popupData.attack.target.lat,
@@ -546,18 +585,23 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
         this.radius
       );
 
-      // Proietta la posizione 3D sullo schermo 2D
+      // Project 3D position to 2D screen coordinates
       const vector = targetPos.clone();
       vector.project(this.camera);
 
-      // Converte le coordinate normalizzate in pixel
+      // Convert to pixel coordinates
       const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
       const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
 
-      this.popupData.position = { x, y };
+      // Update popup position in Angular zone
+      if (this.popupData.position?.x !== x || this.popupData.position?.y !== y) {
+        this.ngZone.run(() => {
+          this.popupData.position = { x, y };
+        });
+      }
     }
 
-    // Rendering della scena
+    // Render the scene
     this.renderer.render(this.scene, this.camera);
   }
 }

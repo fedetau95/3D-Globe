@@ -7,15 +7,15 @@
       <h3>Top 10 Most Attacked Countries</h3>
       <ul>
         <li *ngFor="let country of topAttackedCountries">
-          {{ country.name }} <span class="count">{{ country.attacks }}</span>
+          {{ country.name }} <span class="count">{{ country.attacks | number }}</span>
         </li>
       </ul>
     </div>
     <div class="attack-types">
       <h3>Attack Types</h3>
       <ul>
-        <li *ngFor="let stat of attackTypeStats" class="{{stat.type.toLowerCase()}}">
-          {{ stat.type }} <span class="count">{{ stat.count }}</span>
+        <li *ngFor="let stat of attackTypeStats" [ngClass]="stat.type.toLowerCase()">
+          {{ stat.type }} <span class="count">{{ stat.count | number }}</span>
         </li>
       </ul>
     </div>
@@ -39,8 +39,10 @@
     <h3>{{ popupData.attack?.type }} Attack Detected</h3>
   </div>
   <div class="content">
-    <p><strong>Source:</strong> {{ popupData.attack?.source?.country }} ({{ popupData.attack?.source?.countryCode }})</p>
-    <p><strong>Target:</strong> {{ popupData.attack?.target?.country }} ({{ popupData.attack?.target?.countryCode }})</p>
+    <p><strong>Source:</strong> {{ popupData.attack?.source?.country }} ({{ popupData.attack?.source?.countryCode }})
+    </p>
+    <p><strong>Target:</strong> {{ popupData.attack?.target?.country }} ({{ popupData.attack?.target?.countryCode }})
+    </p>
     <p><strong>Intensity:</strong> {{ popupData.attack?.intensity }} / 10</p>
     <p><strong>Time:</strong> {{ popupData.attack?.timestamp | date:'medium' }}</p>
   </div>

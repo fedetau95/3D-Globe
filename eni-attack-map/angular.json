@@ -27,8 +27,9 @@
             "inlineStyleLanguage": "scss",
             "assets": [
               {
-                "glob": "**/*",
-                "input": "public"
+                "glob": "**/*.jpg",
+                "input": "src/assets/images",
+                "output": "/assets/images/"
               }
             ],
             "styles": [
@@ -91,8 +92,9 @@
             "inlineStyleLanguage": "scss",
             "assets": [
               {
-                "glob": "**/*",
-                "input": "public"
+                "glob": "**/*.jpg",
+                "input": "src/assets/images",
+                "output": "/assets/images/"
               }
             ],
             "styles": [
