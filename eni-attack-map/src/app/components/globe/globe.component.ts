@@ -16,12 +16,25 @@ interface AttackVisual {
   attack: Attack;
   lifetime: number;
   completed: boolean;
+  curve: THREE.QuadraticBezierCurve3; // Aggiungi la curva direttamente qui per comodità
 }
 
 interface PopupData {
   show: boolean;
   attack: Attack | null;
   position: { x: number, y: number } | null;
+}
+
+// Nuova interfaccia per gli elementi nella coda di zoom
+interface ZoomQueueItem {
+  attack: Attack;
+  startPosition: THREE.Vector3;
+  midPosition: THREE.Vector3;
+  endPosition: THREE.Vector3; 
+  startTime?: number;
+  duration: number;
+  state: 'pending' | 'active' | 'completed';
+  followProgress: number; // da 0 a 1 per tracciare il progresso dell'attacco
 }
 
 @Component({
@@ -63,12 +76,17 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
   // Animation and rendering
   private animationFrameId: number = 0;
 
-  // Camera animation
-  private targetZoom: { position: THREE.Vector3, lookAt: THREE.Vector3 } | null = null;
-  private zoomDuration = environment.zoom.duration;
-  private zoomStartTime = 0;
+  // Nuova coda di zoom e variabili correlate
+  private zoomQueue: ZoomQueueItem[] = [];
+  private isZooming: boolean = false;
+  private currentZoomItem: ZoomQueueItem | null = null;
   private initialCameraPosition = new THREE.Vector3();
   private initialCameraLookAt = new THREE.Vector3();
+  private defaultCameraPosition = new THREE.Vector3(0, 0, 200);
+  private defaultLookAt = new THREE.Vector3(0, 0, 0);
+  private cameraIsResetting: boolean = false;
+  private cameraResetStartTime: number = 0;
+  private cameraResetDuration: number = 2.0; // secondi
 
   // Popup for attack information
   popupData: PopupData = {
@@ -100,7 +118,7 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     this.setupRenderer();
     this.createGlobe();
     this.setupLights();
-    this.createStarField(); // Aggiungi questo
+    this.createStarField();
     this.setupControls();
 
     // Set up data subscription
@@ -154,6 +172,9 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     this.camera.position.z = 200;
     this.initialCameraPosition.copy(this.camera.position);
     this.initialCameraLookAt.set(0, 0, 0);
+    
+    // Salva la posizione predefinita per i reset
+    this.defaultCameraPosition.copy(this.camera.position);
   }
 
 
@@ -367,9 +388,10 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
         // Create visual representation of attack
         this.createAttackVisualization(attack);
 
-        // For high-intensity attacks, trigger zoom
+        // Per gli attacchi ad alta intensità, aggiungi alla coda di zoom
         if (attack.intensity >= environment.popup.intensityThreshold) {
-          this.zoomToAttack(attack);
+          this.addToZoomQueue(attack);
+          this.showPopup(attack);
         }
       })
     );
@@ -481,17 +503,13 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     this.activeAttacks.set(attack.id, {
       line,
       particles,
+      curve, // Salviamo la curva direttamente nell'oggetto AttackVisual
       impactEffects,
       startTime: Date.now(),
       attack,
       lifetime: 5000 + (attack.intensity * 300),
       completed: false
     });
-
-    // Show popup for high-intensity attacks
-    if (attack.intensity >= environment.popup.intensityThreshold) {
-      this.showPopup(attack);
-    }
   }
 
   private createParticleTexture(): THREE.Texture {
@@ -660,93 +678,210 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.attackColors[type] || new THREE.Color(0x00ff00); // Default to green if type unknown
   }
 
-  private zoomToAttack(attack: Attack): void {
-    // Get the target location in 3D space
-    const targetPos = this.latLongToVector3(
-      attack.target.lat,
-      attack.target.lng,
-      this.radius
-    );
-
-    // Applica la rotazione corrente del globo al punto target
-    const rotatedTargetPos = targetPos.clone();
+  // Nuovo metodo per aggiungere un attacco alla coda di zoom
+  private addToZoomQueue(attack: Attack): void {
+    // Ottieni la curva per questo attacco
+    const attackVisual = this.activeAttacks.get(attack.id);
+    if (!attackVisual) return;
+    
+    // Estrai i punti dalla curva dell'attacco
+    const curve = attackVisual.curve;
+    const startPoint = curve.getPoint(0);
+    const midPoint = curve.getPoint(0.5);
+    const endPoint = curve.getPoint(1);
+  
+    // Calcola l'offset della telecamera tenendo conto della rotazione del globo
     const globeRotationMatrix = new THREE.Matrix4().makeRotationY(this.globe.rotation.y);
-    rotatedTargetPos.applyMatrix4(globeRotationMatrix);
-
-    // Calculate a position to zoom to
-    const zoomVector = rotatedTargetPos.clone().normalize().multiplyScalar(this.radius * 2.0);
-
-    // Set the target zoom
-    this.targetZoom = {
-      position: zoomVector,
-      lookAt: rotatedTargetPos
+    const rotatedStartPoint = startPoint.clone().applyMatrix4(globeRotationMatrix);
+    const rotatedMidPoint = midPoint.clone().applyMatrix4(globeRotationMatrix);
+    const rotatedEndPoint = endPoint.clone().applyMatrix4(globeRotationMatrix);
+  
+    // Crea un elemento nella coda di zoom
+    const zoomItem: ZoomQueueItem = {
+      attack,
+      startPosition: this.getZoomCameraPosition(rotatedStartPoint, 2.0),
+      midPosition: this.getZoomCameraPosition(rotatedMidPoint, 2.5),
+      endPosition: this.getZoomCameraPosition(rotatedEndPoint, 2.0),
+      duration: attackVisual.lifetime * 0.8,
+      state: 'active',
+      followProgress: 0,
+      startTime: Date.now()
     };
-
-    // Save the current camera position for smooth transition
+    
+    // Inizia immediatamente lo zoom
+    this.currentZoomItem = zoomItem;
+    this.isZooming = true;
+    
+    // Salva la posizione attuale della camera per l'interpolazione
     this.initialCameraPosition.copy(this.camera.position);
     this.initialCameraLookAt.copy(this.controls.target);
-
-    // Start the zoom animation
-    this.zoomStartTime = Date.now();
+    
+    // Disabilita temporaneamente i controlli manuali durante lo zoom
+    this.controls.enabled = false;
   }
 
-  private updateZoom(): void {
-    if (!this.targetZoom) return;
+  // Ottieni la posizione della camera in base a un punto sulla superficie del globo
+  private getZoomCameraPosition(point: THREE.Vector3, distanceFactor: number): THREE.Vector3 {
+    // Calcola la posizione dalla quale guardare il punto target
+    const dir = point.clone().normalize();
+    const cameraPos = dir.multiplyScalar(this.radius * distanceFactor);
+    return cameraPos;
+  }
+ 
 
-    const currentTime = Date.now();
-    const elapsedTime = (currentTime - this.zoomStartTime) / 1000; // in seconds
-
-    if (elapsedTime >= this.zoomDuration) {
-      // Zoom complete
-      this.camera.position.copy(this.targetZoom.position);
-      this.controls.target.copy(this.targetZoom.lookAt);
-      this.targetZoom = null;
-
-      // After delay, return to original view
-      setTimeout(() => {
-        this.resetZoom();
-      }, environment.zoom.resetDelay);
-
+  // Aggiorna l'animazione di zoom durante il ciclo di rendering
+  private updateZoom(delta: number): void {
+    if (!this.isZooming || !this.currentZoomItem) {
       return;
     }
 
-    // Interpolate between initial and target positions
-    const t = elapsedTime / this.zoomDuration;
-    const smoothT = this.easeInOutCubic(t);
+    const item = this.currentZoomItem;
+    const now = Date.now();
+    const elapsed = now - (item.startTime || now);
+    const progress = Math.min(elapsed / item.duration, 1.0);
+    
+    // Aggiorna il progresso di tracciamento dell'attacco
+    item.followProgress = progress;
 
-    // Update camera position
-    this.camera.position.lerpVectors(
-      this.initialCameraPosition,
-      this.targetZoom.position,
-      smoothT
-    );
+    // Calcola la posizione della camera per seguire l'attacco
+    const attackVisual = this.activeAttacks.get(item.attack.id);
+    
+    if (attackVisual) {
+      // Controlla se l'attacco è ancora attivo
+      const attackAge = now - attackVisual.startTime;
+      
+      // Se l'attacco è terminato o la durata dell'animazione è completata
+      if (attackAge >= attackVisual.lifetime || progress >= 1.0) {
+        // Completa l'animazione
+        this.completeCurrentZoom();
+        return;
+      }
 
-    // Update look-at point
-    this.controls.target.lerpVectors(
-      this.initialCameraLookAt,
-      this.targetZoom.lookAt,
-      smoothT
-    );
+      // Calcola la posizione corrente lungo la curva dell'attacco
+      // basata sullo stato di avanzamento delle particelle
+      let particleProgress = 0;
+      const particleData = attackVisual.particles.userData['particles'];
+      
+      if (particleData) {
+        // Calcola il progresso medio delle particelle
+        let totalProgress = 0;
+        let particleCount = 0;
+        
+        for (const particle of particleData) {
+          if (particle.t < 1.0) { // Considera solo le particelle non arrivate
+            totalProgress += particle.t;
+            particleCount++;
+          }
+        }
+        
+        if (particleCount > 0) {
+          particleProgress = totalProgress / particleCount;
+        } else {
+          particleProgress = 1.0; // Tutte le particelle sono arrivate
+        }
+      }
+
+      // Usa il progresso delle particelle per determinare la posizione dell'animazione
+      let cameraPos: THREE.Vector3;
+      let lookAtPos: THREE.Vector3;
+      
+      if (particleProgress < 0.5) {
+        // Prima metà del percorso: dall'origine al punto medio
+        const t = particleProgress * 2; // Normalizza da 0-0.5 a 0-1
+        cameraPos = new THREE.Vector3().lerpVectors(item.startPosition, item.midPosition, t);
+        
+        // Ottieni il punto corrente sulla curva come target
+        const curvePos = attackVisual.curve.getPoint(particleProgress);
+        // Applica la rotazione del globo
+        const rotatedCurvePos = curvePos.clone();
+        const globeRotationMatrix = new THREE.Matrix4().makeRotationY(this.globe.rotation.y);
+        rotatedCurvePos.applyMatrix4(globeRotationMatrix);
+        lookAtPos = rotatedCurvePos;
+      } else {
+        // Seconda metà del percorso: dal punto medio alla destinazione
+        const t = (particleProgress - 0.5) * 2; // Normalizza da 0.5-1 a 0-1
+        cameraPos = new THREE.Vector3().lerpVectors(item.midPosition, item.endPosition, t);
+        
+        // Ottieni il punto corrente sulla curva come target
+        const curvePos = attackVisual.curve.getPoint(particleProgress);
+        // Applica la rotazione del globo
+        const rotatedCurvePos = curvePos.clone();
+        const globeRotationMatrix = new THREE.Matrix4().makeRotationY(this.globe.rotation.y);
+        rotatedCurvePos.applyMatrix4(globeRotationMatrix);
+        lookAtPos = rotatedCurvePos;
+      }
+
+      // Applica l'easing per una transizione più fluida
+      const smoothT = this.easeInOutCubic(progress);
+      
+      // Aggiorna la posizione della camera
+      this.camera.position.copy(cameraPos);
+      this.controls.target.copy(lookAtPos);
+      this.controls.update();
+    } else {
+      // Se l'attacco non è più attivo, termina l'animazione
+      this.completeCurrentZoom();
+    }
   }
 
-  private resetZoom(): void {
-    // Set target to return to original view
-    this.targetZoom = {
-      position: new THREE.Vector3(0, 0, 200),
-      lookAt: new THREE.Vector3(0, 0, 0)
-    };
+  // Completa l'animazione di zoom corrente
+  private completeCurrentZoom(): void {
+    if (!this.currentZoomItem) return;
+    
+    // Segna l'elemento come completato
+    this.currentZoomItem.state = 'completed';
+    this.currentZoomItem = null;
+    
+    // Avvia il reset della camera alla posizione originale
+    this.startCameraReset();
+  }
 
-    // Save current position for interpolation
+  // Avvia il reset della camera alla posizione di default
+  private startCameraReset(): void {
+    this.isZooming = false;
+    this.cameraIsResetting = true;
+    this.cameraResetStartTime = Date.now();
+    
+    // Salva la posizione attuale della camera per l'interpolazione
     this.initialCameraPosition.copy(this.camera.position);
     this.initialCameraLookAt.copy(this.controls.target);
-
-    // Start zoom animation
-    this.zoomStartTime = Date.now();
   }
 
-  // Easing function for smooth animations
-  private easeInOutCubic(t: number): number {
-    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  // Aggiorna l'animazione di reset della camera
+  private updateCameraReset(): void {
+    if (!this.cameraIsResetting) return;
+    
+    const now = Date.now();
+    const elapsed = (now - this.cameraResetStartTime) / 1000; // in secondi
+    
+    if (elapsed >= this.cameraResetDuration) {
+      // Reset completato
+      this.camera.position.copy(this.defaultCameraPosition);
+      this.controls.target.copy(this.defaultLookAt);
+      this.cameraIsResetting = false;
+      this.controls.enabled = true; // Riabilita i controlli manuali
+      return;
+    }
+    
+    // Interpola tra la posizione corrente e quella di default
+    const t = elapsed / this.cameraResetDuration;
+    const smoothT = this.easeInOutCubic(t);
+    
+    // Aggiorna la posizione della camera
+    this.camera.position.lerpVectors(
+      this.initialCameraPosition,
+      this.defaultCameraPosition,
+      smoothT
+    );
+    
+    // Aggiorna il punto di mira
+    this.controls.target.lerpVectors(
+      this.initialCameraLookAt,
+      this.defaultLookAt,
+      smoothT
+    );
+    
+    this.controls.update();
   }
 
   private showPopup(attack: Attack): void {
@@ -789,8 +924,15 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
 
     const delta = this.clock.getDelta();
 
-    // Update dynamic zoom
-    this.updateZoom();
+    // Aggiorna le animazioni di zoom
+    if (this.isZooming) {
+      this.updateZoom(delta);
+    } else if (this.cameraIsResetting) {
+      this.updateCameraReset();
+    } else {
+      // Aggiorna i controlli orbitali solo se non si sta zoomando
+      this.controls.update();
+    }
 
     // Rotate globe slowly
     this.globe.rotation.y += this.rotationSpeed;
@@ -800,9 +942,6 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       const speedFactor = starLayer.userData['speedFactor'];
       starLayer.rotation.y -= this.rotationSpeed * speedFactor;
     });
-
-    // Update orbital controls
-    this.controls.update();
 
     // Handle active attacks
     const now = Date.now();
@@ -890,7 +1029,7 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       // Animate particles along the curve
       const positions = (attackVisual.particles.geometry as THREE.BufferGeometry).attributes['position'].array;
       const particleCount = positions.length / 3;
-      const curve = attackVisual.particles.userData['curve'] as THREE.QuadraticBezierCurve3;
+      const curve = attackVisual.curve;
       const particleData = attackVisual.particles.userData['particles'];
       let allParticlesArrived = true;
 
@@ -1054,6 +1193,11 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
         }
       }
     });
+  }
+
+  // Funzioni di easing per animazioni fluide
+  private easeInOutCubic(x: number): number {
+    return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
   }
 
   private easeOutQuart(x: number): number {
