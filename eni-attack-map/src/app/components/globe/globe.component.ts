@@ -82,7 +82,7 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
   private currentZoomItem: ZoomQueueItem | null = null;
   private initialCameraPosition = new THREE.Vector3();
   private initialCameraLookAt = new THREE.Vector3();
-  private defaultCameraPosition = new THREE.Vector3(0, 0, 200);
+  private defaultCameraPosition = new THREE.Vector3(-150, 150, 150);
   private defaultLookAt = new THREE.Vector3(0, 0, 0);
   private cameraIsResetting: boolean = false;
   private cameraResetStartTime: number = 0;
@@ -168,12 +168,18 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       1000  // Far clipping plane
     );
 
-    // Set initial camera position
-    this.camera.position.z = 200;
+    // Set initial camera position to see the upper hemisphere with Europe
+    // Position the camera looking at Europe (roughly 45° north, 10° east)
+    this.camera.position.set(
+      -150,  // X coordinate (negative to move camera left)
+      150,   // Y coordinate (positive to move camera up)
+      150    // Z coordinate (positive to move camera back)
+    );
+
     this.initialCameraPosition.copy(this.camera.position);
     this.initialCameraLookAt.set(0, 0, 0);
 
-    // Salva la posizione predefinita per i reset
+    // Save the default position for resets
     this.defaultCameraPosition.copy(this.camera.position);
   }
 
@@ -379,6 +385,10 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     this.controls.minDistance = environment.zoom.minDistance;
     this.controls.maxDistance = environment.zoom.maxDistance;
     this.controls.enablePan = false;
+
+    // Set initial rotation to show Europe
+    this.controls.target.set(0, 0, 0);
+    this.controls.update();
   }
 
   private subscribeToAttacks(): void {
@@ -472,44 +482,44 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     this.globe.add(line);
 
     const particleGeometry = new THREE.BufferGeometry();
-const particleCount = 20 + attack.intensity; // Più particelle per attacchi più intensi
-const particlePositions = new Float32Array(particleCount * 3);
+    const particleCount = 20 + attack.intensity; // Più particelle per attacchi più intensi
+    const particlePositions = new Float32Array(particleCount * 3);
 
-// Set initial particle positions at the source with small random offsets
-for (let i = 0; i < particleCount; i++) {
-  particlePositions[i * 3] = sourcePos.x + (Math.random() - 0.5) * 2;
-  particlePositions[i * 3 + 1] = sourcePos.y + (Math.random() - 0.5) * 2;
-  particlePositions[i * 3 + 2] = sourcePos.z + (Math.random() - 0.5) * 2;
-}
+    // Set initial particle positions at the source with small random offsets
+    for (let i = 0; i < particleCount; i++) {
+      particlePositions[i * 3] = sourcePos.x + (Math.random() - 0.5) * 2;
+      particlePositions[i * 3 + 1] = sourcePos.y + (Math.random() - 0.5) * 2;
+      particlePositions[i * 3 + 2] = sourcePos.z + (Math.random() - 0.5) * 2;
+    }
 
-particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
 
-// Crea una texture per le particelle (più grande per permettere il bagliore)
-const particleTexture = this.createParticleTexture();
+    // Crea una texture per le particelle (più grande per permettere il bagliore)
+    const particleTexture = this.createParticleTexture();
 
-// Create particle material with texture
-const particleMaterial = new THREE.PointsMaterial({
-  color: color,
-  size: 2.5 + (attack.intensity * 0.2),
-  transparent: true,
-  opacity: 0.9,
-  blending: THREE.AdditiveBlending,
-  map: particleTexture, // Usa la texture circolare con bagliore
-  depthWrite: false // Imposta a false per evitare problemi di rendering con la trasparenza
-});
+    // Create particle material with texture
+    const particleMaterial = new THREE.PointsMaterial({
+      color: color,
+      size: 2.5 + (attack.intensity * 0.2),
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      map: particleTexture, // Usa la texture circolare con bagliore
+      depthWrite: false // Imposta a false per evitare problemi di rendering con la trasparenza
+    });
 
-// Create particle system
-const particles = new THREE.Points(particleGeometry, particleMaterial);
-particles.userData = {
-  curve: curve,
-  particles: Array.from({ length: particleCount }, () => ({
-    t: 0,
-    speed: 0.002 + (Math.random() * 0.002) + (attack.intensity * 0.0005) // Velocità variabile basata sull'intensità
-  }))
-};
+    // Create particle system
+    const particles = new THREE.Points(particleGeometry, particleMaterial);
+    particles.userData = {
+      curve: curve,
+      particles: Array.from({ length: particleCount }, () => ({
+        t: 0,
+        speed: 0.002 + (Math.random() * 0.002) + (attack.intensity * 0.0005) // Velocità variabile basata sull'intensità
+      }))
+    };
 
-// Aggiungi le particelle al globo invece che alla scena
-this.globe.add(particles);
+    // Aggiungi le particelle al globo invece che alla scena
+    this.globe.add(particles);
 
     // Preparare l'array per gli effetti di impatto (inizialmente vuoto)
     const impactEffects: THREE.Object3D[] = [];
@@ -532,7 +542,7 @@ this.globe.add(particles);
     const size = 128; // Aumentato per maggiore dettaglio
     canvas.width = size;
     canvas.height = size;
-  
+
     const context = canvas.getContext('2d');
     if (context) {
       // Crea un gradiente radiale per un bagliore morbido
@@ -540,29 +550,29 @@ this.globe.add(particles);
         size / 2, size / 2, 0,
         size / 2, size / 2, size / 2
       );
-  
+
       // Aggiungiamo più stop per un bagliore più raffinato
       gradient.addColorStop(0.0, 'rgba(255,255,255,1.0)'); // Centro bianco brillante
       gradient.addColorStop(0.2, 'rgba(255,255,255,0.9)'); // Anello interno quasi bianco
       gradient.addColorStop(0.4, 'rgba(255,255,255,0.5)'); // Bagliore medio
       gradient.addColorStop(0.6, 'rgba(255,255,255,0.2)'); // Bagliore esterno debole
       gradient.addColorStop(1.0, 'rgba(255,255,255,0)');   // Completamente trasparente ai bordi
-  
+
       context.fillStyle = gradient;
       context.fillRect(0, 0, size, size);
-  
+
       // Aggiungi un elemento di brillantezza al centro
       context.beginPath();
       context.arc(size / 2, size / 2, size / 8, 0, Math.PI * 2);
       context.fillStyle = 'rgba(255,255,255,0.8)';
       context.fill();
     }
-  
+
     const texture = new THREE.Texture(canvas);
     texture.needsUpdate = true;
     return texture;
   }
-  
+
 
   private createImpactEffect(position: THREE.Vector3, color: THREE.Color, intensity: number): THREE.Object3D[] {
     const effects: THREE.Object3D[] = [];
@@ -707,19 +717,19 @@ this.globe.add(particles);
     // Ottieni la curva per questo attacco
     const attackVisual = this.activeAttacks.get(attack.id);
     if (!attackVisual) return;
-  
+
     // Estrai i punti dalla curva dell'attacco
     const curve = attackVisual.curve;
     const startPoint = curve.getPoint(0);
     const midPoint = curve.getPoint(0.5);
     const endPoint = curve.getPoint(1);
-  
+
     // Calcola l'offset della telecamera tenendo conto della rotazione del globo
     const globeRotationMatrix = new THREE.Matrix4().makeRotationY(this.globe.rotation.y);
     const rotatedStartPoint = startPoint.clone().applyMatrix4(globeRotationMatrix);
     const rotatedMidPoint = midPoint.clone().applyMatrix4(globeRotationMatrix);
     const rotatedEndPoint = endPoint.clone().applyMatrix4(globeRotationMatrix);
-  
+
     // Crea un elemento nella coda di zoom
     const zoomItem: ZoomQueueItem = {
       attack,
@@ -731,55 +741,55 @@ this.globe.add(particles);
       followProgress: 0,
       startTime: Date.now()
     };
-  
+
     // Salva la posizione attuale della camera per l'interpolazione
     this.initialCameraPosition.copy(this.camera.position);
     this.initialCameraLookAt.copy(this.controls.target);
-  
+
     // Imposta lo zoom item corrente e avvia la transizione
     this.currentZoomItem = zoomItem;
     this.isZooming = true;
-    
+
     // Disabilita temporaneamente i controlli manuali durante lo zoom
     this.controls.enabled = false;
   }
-  
+
   // Nuovo metodo per gestire la transizione iniziale
   private updateInitialTransition(item: ZoomQueueItem, now: number): boolean {
     if (item.state !== 'pending') return false;
-    
+
     // Calcola il tempo trascorso per la transizione iniziale (più breve, 0.7 secondi)
     const initialTransitionDuration = 500; // 2000ms per la transizione iniziale
     const elapsed = now - (item.startTime || now);
     const progress = Math.min(elapsed / initialTransitionDuration, 1.0);
-    
+
     // Se la transizione iniziale è completata
     if (progress >= 1.0) {
       item.state = 'active';
       return false;
     }
-    
+
     // Calcola la posizione della camera con easing
     const smoothT = this.easeInOutCubic(progress);
-    
+
     // Interpola dalla posizione iniziale alla posizione di partenza dell'attacco
     this.camera.position.lerpVectors(
       this.initialCameraPosition,
       item.startPosition,
       smoothT
     );
-    
+
     // Ottieni un punto intermedio tra la posizione attuale del target e quella dell'attacco
     const attackVisual = this.activeAttacks.get(item.attack.id);
     if (attackVisual) {
       const curve = attackVisual.curve;
       const startPoint = curve.getPoint(0);
-      
+
       // Applica la rotazione del globo
       const rotatedStartPoint = startPoint.clone();
       const globeRotationMatrix = new THREE.Matrix4().makeRotationY(this.globe.rotation.y);
       rotatedStartPoint.applyMatrix4(globeRotationMatrix);
-      
+
       // Interpola verso il punto iniziale dell'attacco
       this.controls.target.lerpVectors(
         this.initialCameraLookAt,
@@ -787,69 +797,69 @@ this.globe.add(particles);
         smoothT
       );
     }
-    
+
     this.controls.update();
     return true;
   }
-  
+
   // Metodo updateZoom modificato per includere la transizione iniziale
   private updateZoom(delta: number): void {
     if (!this.isZooming || !this.currentZoomItem) {
       return;
     }
-  
+
     const item = this.currentZoomItem;
     const now = Date.now();
-    
+
     // Gestisci prima la transizione iniziale se necessario
     if (this.updateInitialTransition(item, now)) {
       return; // Se stiamo ancora nella transizione iniziale, non procedere oltre
     }
-    
+
     // Continua con la normale logica di tracciamento dell'attacco
     const elapsed = now - (item.startTime || now);
     const progress = Math.min(elapsed / item.duration, 1.0);
-    
+
     // Aggiorna il progresso di tracciamento dell'attacco
     item.followProgress = progress;
-  
+
     // Calcola la posizione della camera per seguire l'attacco
     const attackVisual = this.activeAttacks.get(item.attack.id);
-    
+
     if (attackVisual) {
       // Controlla se l'attacco è ancora attivo
       const attackAge = now - attackVisual.startTime;
-      
+
       // Se l'attacco è terminato o la durata dell'animazione è completata
       if (attackAge >= attackVisual.lifetime || progress >= 1.0) {
         // Completa l'animazione
         this.completeCurrentZoom();
         return;
       }
-  
+
       // Traccia solo la prima particella invece della media di tutte
       let particleProgress = 0;
       const particleData = attackVisual.particles.userData['particles'];
-      
+
       if (particleData && particleData.length > 0) {
         // Usa solo la prima particella per determinare la posizione
         particleProgress = particleData[0].t;
-        
+
         // Assicurati che non arrivi esattamente a 1.0 per evitare scatti
         if (particleProgress > 0.98) {
           particleProgress = 0.98;
         }
       }
-  
+
       // Usa il progresso della prima particella per determinare la posizione dell'animazione
       let cameraPos: THREE.Vector3;
       let lookAtPos: THREE.Vector3;
-      
+
       if (particleProgress < 0.5) {
         // Prima metà del percorso: dall'origine al punto medio
         const t = particleProgress * 2; // Normalizza da 0-0.5 a 0-1
         cameraPos = new THREE.Vector3().lerpVectors(item.startPosition, item.midPosition, t);
-        
+
         // Ottieni il punto corrente sulla curva come target
         const curvePos = attackVisual.curve.getPoint(particleProgress);
         // Applica la rotazione del globo
@@ -861,7 +871,7 @@ this.globe.add(particles);
         // Seconda metà del percorso: dal punto medio alla destinazione
         const t = (particleProgress - 0.5) * 2; // Normalizza da 0.5-1 a 0-1
         cameraPos = new THREE.Vector3().lerpVectors(item.midPosition, item.endPosition, t);
-        
+
         // Ottieni il punto corrente sulla curva come target
         const curvePos = attackVisual.curve.getPoint(particleProgress);
         // Applica la rotazione del globo
@@ -870,10 +880,10 @@ this.globe.add(particles);
         rotatedCurvePos.applyMatrix4(globeRotationMatrix);
         lookAtPos = rotatedCurvePos;
       }
-  
+
       // Applica l'easing per una transizione più fluida
       const smoothT = this.easeInOutCubic(progress);
-      
+
       // Aggiorna la posizione della camera
       this.camera.position.copy(cameraPos);
       this.controls.target.copy(lookAtPos);
@@ -890,7 +900,7 @@ this.globe.add(particles);
     const cameraPos = dir.multiplyScalar(this.radius * distanceFactor);
     return cameraPos;
   }
- 
+
 
   // Completa l'animazione di zoom corrente
   private completeCurrentZoom(): void {
@@ -1144,11 +1154,11 @@ this.globe.add(particles);
         const blinkFrequency = 100 + (10 - attackVisual.attack.intensity) * 50; // Higher intensity = faster blinking
         const blink = Math.sin(age / blinkFrequency) > 0;
         const pulseSize = 1.0 + 0.2 * Math.sin(age / 200); // Effetto pulsante
-      
+
         (attackVisual.line.material as THREE.LineDashedMaterial).opacity = blink ? 0.9 : 0.4;
         (attackVisual.particles.material as THREE.PointsMaterial).opacity = blink ? 1 : 0.5;
         // Aggiungi effetto pulsante alla dimensione delle particelle
-        (attackVisual.particles.material as THREE.PointsMaterial).size = 
+        (attackVisual.particles.material as THREE.PointsMaterial).size =
           (2.5 + (attackVisual.attack.intensity * 0.2)) * pulseSize;
       }
     });
@@ -1268,24 +1278,24 @@ this.globe.add(particles);
   }
 
   // Funzione di Easing migliorata per movimenti più fluidi
-private easeInOutCubic(x: number): number {
-  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
-}
+  private easeInOutCubic(x: number): number {
+    return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  }
 
-// Aggiungiamo una funzione di easing più dolce per l'inizio
-private easeOutQuint(x: number): number {
-  return 1 - Math.pow(1 - x, 5);
-}
+  // Aggiungiamo una funzione di easing più dolce per l'inizio
+  private easeOutQuint(x: number): number {
+    return 1 - Math.pow(1 - x, 5);
+  }
 
-// Aggiunta di una funzione di Easing con elasticità per un effetto più naturale 
-private easeOutElastic(x: number): number {
-  const c4 = (2 * Math.PI) / 3;
-  return x === 0
-    ? 0
-    : x === 1
-    ? 1
-    : Math.pow(2, -10 * x) * Math.sin((x * 10 - 0.75) * c4) + 1;
-}
+  // Aggiunta di una funzione di Easing con elasticità per un effetto più naturale 
+  private easeOutElastic(x: number): number {
+    const c4 = (2 * Math.PI) / 3;
+    return x === 0
+      ? 0
+      : x === 1
+        ? 1
+        : Math.pow(2, -10 * x) * Math.sin((x * 10 - 0.75) * c4) + 1;
+  }
 
   private easeOutQuart(x: number): number {
     return 1 - Math.pow(1 - x, 4);
