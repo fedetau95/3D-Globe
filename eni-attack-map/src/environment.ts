@@ -25,11 +25,11 @@ export const environment = {
   zoom: {
     minDistance: 120,
     maxDistance: 300,
-    duration: 3.5,           // seconds
+    duration: 5,           // seconds
     resetDelay: 5000,        // ms
   },
   popup: {
     duration: 5000,          // ms
-    intensityThreshold: 10,   // abbassato da 9 a 7 per mostrare più popup
+    intensityThreshold: 8,   // abbassato da 9 a 7 per mostrare più popup
   }
 };
