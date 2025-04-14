@@ -417,21 +417,32 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       attack.source.lng,
       this.radius
     );
-
+  
     const targetPos = this.latLongToVector3(
       attack.target.lat,
       attack.target.lng,
       this.radius
     );
-
+  
+    // Calcola la distanza angolare (in radianti) tra i punti
+    const sourceDir = sourcePos.clone().normalize();
+    const targetDir = targetPos.clone().normalize();
+    const angularDistance = Math.acos(sourceDir.dot(targetDir));
+    
     // Create a curved path from source to target
     const midPoint = new THREE.Vector3().addVectors(sourcePos, targetPos).multiplyScalar(0.5);
     const distance = sourcePos.distanceTo(targetPos);
-    const altitude = this.radius * 0.3 + (distance / 100) + (attack.intensity * 0.5);
-
+    
+    // Calcola l'altezza della curva basandosi sulla distanza angolare
+    // Quando la distanza angolare si avvicina a π (antipodi), l'altezza aumenta significativamente
+    const baseAltitude = this.radius * 0.3;
+    const angularFactor = Math.pow(angularDistance / Math.PI, 2) * this.radius * 2;
+    const intensityFactor = attack.intensity * 0.5;
+    const altitude = baseAltitude + angularFactor + intensityFactor;
+  
     // Adjust midpoint for curve height
     midPoint.normalize().multiplyScalar(this.radius + altitude);
-
+  
     // Create quadratic curve
     const curve = new THREE.QuadraticBezierCurve3(sourcePos, midPoint, targetPos);
 

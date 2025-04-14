@@ -30,6 +30,6 @@ export const environment = {
   },
   popup: {
     duration: 5000,          // ms
-    intensityThreshold: 7,   // abbassato da 9 a 7 per mostrare più popup
+    intensityThreshold: 10,   // abbassato da 9 a 7 per mostrare più popup
   }
 };
