@@ -99,13 +99,13 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     this.setupLights();
     this.createStarField(); // Aggiungi questo
     this.setupControls();
-  
+
     // Set up data subscription
     this.subscribeToAttacks();
-  
+
     // Start animation loop
     this.ngZone.runOutsideAngular(() => this.animate());
-  
+
     // Update statistics periodically
     setInterval(() => {
       this.ngZone.run(() => this.updateStats());
@@ -138,7 +138,7 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     // Create Three.js scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x000000); // Nero profondo
-    
+
     // Set up camera
     this.camera = new THREE.PerspectiveCamera(
       60,  // Field of view
@@ -146,13 +146,13 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       0.1,  // Near clipping plane
       1000  // Far clipping plane
     );
-  
+
     // Set initial camera position
     this.camera.position.z = 200;
     this.initialCameraPosition.copy(this.camera.position);
     this.initialCameraLookAt.set(0, 0, 0);
   }
-  
+
 
   private setupRenderer(): void {
     // Create WebGL renderer
@@ -426,7 +426,9 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Create line mesh
     const line = new THREE.Line(lineGeometry, lineMaterial);
-    this.scene.add(line);
+
+    // MODIFICA: Aggiungi la linea al globo invece che alla scena
+    this.globe.add(line);
 
     // Create particles to flow along the line
     const particleGeometry = new THREE.BufferGeometry();
@@ -453,7 +455,9 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Create particle system
     const particles = new THREE.Points(particleGeometry, particleMaterial);
-    this.scene.add(particles);
+
+    // MODIFICA: Aggiungi le particelle al globo invece che alla scena
+    this.globe.add(particles);
 
     // Store reference to attack visualization
     this.activeAttacks.set(attack.id, {
@@ -481,20 +485,25 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       attack.target.lng,
       this.radius
     );
-
+    
+    // Applica la rotazione corrente del globo al punto target
+    const rotatedTargetPos = targetPos.clone();
+    const globeRotationMatrix = new THREE.Matrix4().makeRotationY(this.globe.rotation.y);
+    rotatedTargetPos.applyMatrix4(globeRotationMatrix);
+  
     // Calculate a position to zoom to
-    const zoomVector = targetPos.clone().normalize().multiplyScalar(this.radius * 1.5);
-
+    const zoomVector = rotatedTargetPos.clone().normalize().multiplyScalar(this.radius * 2.0);
+  
     // Set the target zoom
     this.targetZoom = {
       position: zoomVector,
-      lookAt: targetPos
+      lookAt: rotatedTargetPos
     };
-
+  
     // Save the current camera position for smooth transition
     this.initialCameraPosition.copy(this.camera.position);
     this.initialCameraLookAt.copy(this.controls.target);
-
+  
     // Start the zoom animation
     this.zoomStartTime = Date.now();
   }
@@ -595,35 +604,35 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private animate(): void {
     this.animationFrameId = requestAnimationFrame(() => this.animate());
-  
+
     const delta = this.clock.getDelta();
-  
+
     // Update dynamic zoom
     this.updateZoom();
-  
+
     // Rotate globe slowly
     this.globe.rotation.y += this.rotationSpeed;
-    
+
     // Rotate stars to match earth rotation but at diverse speeds
     this.stars.forEach(starLayer => {
       const speedFactor = starLayer.userData['speedFactor'];
       starLayer.rotation.y -= this.rotationSpeed * speedFactor;
     });
-  
+
     // Il resto del codice animate rimane uguale...
-    
+
     // Update orbital controls
     this.controls.update();
-  
+
     // Handle active attacks
     const now = Date.now();
-    this.activeAttacks.forEach((attackVisual, id) => { 
+    this.activeAttacks.forEach((attackVisual, id) => {
       const age = now - attackVisual.startTime;
 
       // Remove expired attacks
       if (age > attackVisual.lifetime) {
-        this.scene.remove(attackVisual.line);
-        this.scene.remove(attackVisual.particles);
+        this.globe.remove(attackVisual.line);
+        this.globe.remove(attackVisual.particles);
         this.activeAttacks.delete(id);
         return;
       }
@@ -662,15 +671,21 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
         this.popupData.attack.target.lng,
         this.radius
       );
-
+      
+      // Crea un vettore che tenga conto della rotazione del globo
+      const rotatedPos = targetPos.clone();
+      
+      // Applica la stessa rotazione del globo
+      const globeRotationMatrix = new THREE.Matrix4().makeRotationY(this.globe.rotation.y);
+      rotatedPos.applyMatrix4(globeRotationMatrix);
+      
       // Project 3D position to 2D screen coordinates
-      const vector = targetPos.clone();
-      vector.project(this.camera);
-
+      rotatedPos.project(this.camera);
+    
       // Convert to pixel coordinates
-      const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
-      const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
-
+      const x = (rotatedPos.x * 0.5 + 0.5) * window.innerWidth;
+      const y = (-rotatedPos.y * 0.5 + 0.5) * window.innerHeight;
+    
       // Update popup position in Angular zone
       if (this.popupData.position?.x !== x || this.popupData.position?.y !== y) {
         this.ngZone.run(() => {
