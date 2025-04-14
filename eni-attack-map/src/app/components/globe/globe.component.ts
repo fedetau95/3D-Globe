@@ -38,6 +38,9 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
   private globe!: THREE.Mesh;
   private controls!: OrbitControls;
   private clock = new THREE.Clock();
+  private starField!: THREE.Points;
+  private stars: THREE.Points[] = [];
+  private starCount = 10000; // Numero di stelle nello sfondo
 
   // Globe parameters
   private radius = environment.globe.radius;
@@ -94,30 +97,19 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     this.setupRenderer();
     this.createGlobe();
     this.setupLights();
+    this.createStarField(); // Aggiungi questo
     this.setupControls();
-
+  
     // Set up data subscription
     this.subscribeToAttacks();
-
+  
     // Start animation loop
     this.ngZone.runOutsideAngular(() => this.animate());
-
+  
     // Update statistics periodically
     setInterval(() => {
       this.ngZone.run(() => this.updateStats());
     }, 5000);
-    // Aggiungi punti di riferimento nella scena
-    const addDebugMarker = (lat: number, lng: number, color: number) => {
-      const marker = new THREE.Mesh(
-        new THREE.SphereGeometry(1),
-        new THREE.MeshBasicMaterial({ color })
-      );
-      marker.position.copy(this.latLongToVector3(lat, lng, this.radius));
-      this.globe.add(marker);
-    }
-
-    // Esempio: Marker rosso a Roma
-    addDebugMarker(41.9028, 12.4964, 0xff0000);
   }
 
   ngOnDestroy(): void {
@@ -145,8 +137,8 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
   private initScene(): void {
     // Create Three.js scene
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x000000);
-
+    this.scene.background = new THREE.Color(0x000000); // Nero profondo
+    
     // Set up camera
     this.camera = new THREE.PerspectiveCamera(
       60,  // Field of view
@@ -154,12 +146,13 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       0.1,  // Near clipping plane
       1000  // Far clipping plane
     );
-
+  
     // Set initial camera position
     this.camera.position.z = 200;
     this.initialCameraPosition.copy(this.camera.position);
     this.initialCameraLookAt.set(0, 0, 0);
   }
+  
 
   private setupRenderer(): void {
     // Create WebGL renderer
@@ -176,19 +169,96 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private setupLights(): void {
-    // Ambient light for base illumination
-    const ambientLight = new THREE.AmbientLight(0x404040, 1);
+    // Aumentiamo l'intensità della luce ambientale per una maggiore uniformità
+    const ambientLight = new THREE.AmbientLight(0x404040, 3); // Aumento dell'intensità
     this.scene.add(ambientLight);
 
-    // Directional light for sunlight effect
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(1, 1, 1).normalize();
-    this.scene.add(directionalLight);
+    // Aggiungiamo più luci direzionali da diverse angolazioni
+    const createDirectionalLight = (x: number, y: number, z: number, intensity: number) => {
+      const light = new THREE.DirectionalLight(0xffffff, intensity);
+      light.position.set(x, y, z).normalize();
+      this.scene.add(light);
+      return light;
+    };
 
-    // Point light for highlight
-    const pointLight = new THREE.PointLight(0xffffff, 0.5);
-    pointLight.position.set(50, 50, 50);
-    this.scene.add(pointLight);
+    // Luci da varie direzioni per un'illuminazione più uniforme
+    createDirectionalLight(1, 1, 1, 0.5);
+    createDirectionalLight(-1, 1, 1, 0.5);
+    createDirectionalLight(1, -1, 1, 0.5);
+    createDirectionalLight(-1, -1, 1, 0.5);
+
+    // Luce posteriore più debole
+    createDirectionalLight(-1, 0, -1, 0.2);
+    createDirectionalLight(1, 0, -1, 0.2);
+  }
+
+  private createStarField(): void {
+    // Creiamo tre layer di stelle con diverse velocità di rotazione
+    this.createStarLayer(this.starCount * 0.6, 300, 0.8); // Layer esterno, più lento
+    this.createStarLayer(this.starCount * 0.3, 500, 0.9); // Layer medio
+    this.createStarLayer(this.starCount * 0.1, 700, 1.0); // Layer interno, più veloce
+  }
+  private createStarLayer(count: number, radius: number, speedFactor: number): void {
+    // Geometria per le stelle
+    const starsGeometry = new THREE.BufferGeometry();
+    const starPositions = new Float32Array(count * 3);
+    const starColors = new Float32Array(count * 3);
+    const starSizes = new Float32Array(count);
+
+    // Generazione casuale di posizioni delle stelle
+    for (let i = 0; i < count; i++) {
+      const i3 = i * 3;
+
+      // Posizione sferica casuale
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+
+      starPositions[i3] = radius * Math.sin(phi) * Math.cos(theta);
+      starPositions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+      starPositions[i3 + 2] = radius * Math.cos(phi);
+
+      // Colori variabili per le stelle (bianco, azzurro, giallastro)
+      const colorChoice = Math.random();
+      if (colorChoice < 0.6) {
+        // Stelle bianche (60%)
+        starColors[i3] = 1.0;
+        starColors[i3 + 1] = 1.0;
+        starColors[i3 + 2] = 1.0;
+      } else if (colorChoice < 0.8) {
+        // Stelle azzurre (20%)
+        starColors[i3] = 0.8;
+        starColors[i3 + 1] = 0.9;
+        starColors[i3 + 2] = 1.0;
+      } else {
+        // Stelle giallastre (20%)
+        starColors[i3] = 1.0;
+        starColors[i3 + 1] = 0.9;
+        starColors[i3 + 2] = 0.7;
+      }
+
+      // Dimensioni variabili casuali
+      starSizes[i] = Math.random() * 2 + 0.5;
+    }
+
+    starsGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+    starsGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+    starsGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
+
+    // Materiale per le stelle
+    const starsMaterial = new THREE.PointsMaterial({
+      size: 1,
+      transparent: true,
+      opacity: 0.8,
+      vertexColors: true,
+      blending: THREE.AdditiveBlending,
+      sizeAttenuation: true
+    });
+
+    // Creiamo il sistema di stelle
+    const starPoints = new THREE.Points(starsGeometry, starsMaterial);
+    starPoints.userData = { speedFactor }; // Memorizziamo il fattore di velocità
+    this.scene.add(starPoints);
+    this.stars.push(starPoints);
   }
 
   private createGlobe(): void {
@@ -525,18 +595,26 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private animate(): void {
     this.animationFrameId = requestAnimationFrame(() => this.animate());
-
+  
     const delta = this.clock.getDelta();
-
+  
     // Update dynamic zoom
     this.updateZoom();
-
+  
     // Rotate globe slowly
     this.globe.rotation.y += this.rotationSpeed;
-
+    
+    // Rotate stars to match earth rotation but at diverse speeds
+    this.stars.forEach(starLayer => {
+      const speedFactor = starLayer.userData['speedFactor'];
+      starLayer.rotation.y -= this.rotationSpeed * speedFactor;
+    });
+  
+    // Il resto del codice animate rimane uguale...
+    
     // Update orbital controls
     this.controls.update();
-
+  
     // Handle active attacks
     const now = Date.now();
     this.activeAttacks.forEach((attackVisual, id) => { 

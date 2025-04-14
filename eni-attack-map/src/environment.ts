@@ -17,7 +17,7 @@ export const environment = {
   },
   attacks: {
     simulationInterval: 1000, // ms
-    attackProbability: 0.7,   // 70% chance per interval
+    attackProbability: 0.3,   // 30% chance per interval
     maxIntensity: 10,
     lifetime: 10000,          // ms
     types: ['DoS', 'Malware', 'Phishing', 'Ransomware', 'SQL Injection'],
@@ -30,6 +30,6 @@ export const environment = {
   },
   popup: {
     duration: 5000,          // ms
-    intensityThreshold: 7,   // show popup for attacks with intensity >= this value
+    intensityThreshold: 10,   // show popup for attacks with intensity >= this value
   }
 };
