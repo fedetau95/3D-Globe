@@ -33,7 +33,7 @@ interface ZoomQueueItem {
   endPosition: THREE.Vector3;
   startTime?: number;
   duration: number;
-  state: 'pending' | 'active' | 'completed';
+  state: 'pending' | 'active' | 'completed'; // Aggiunto 'pending' per la transizione iniziale
   followProgress: number; // da 0 a 1 per tracciare il progresso dell'attacco
 }
 
@@ -689,24 +689,23 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.attackColors[type] || new THREE.Color(0x00ff00); // Default to green if type unknown
   }
 
-  // Nuovo metodo per aggiungere un attacco alla coda di zoom
   private addToZoomQueue(attack: Attack): void {
     // Ottieni la curva per questo attacco
     const attackVisual = this.activeAttacks.get(attack.id);
     if (!attackVisual) return;
-
+  
     // Estrai i punti dalla curva dell'attacco
     const curve = attackVisual.curve;
     const startPoint = curve.getPoint(0);
     const midPoint = curve.getPoint(0.5);
     const endPoint = curve.getPoint(1);
-
+  
     // Calcola l'offset della telecamera tenendo conto della rotazione del globo
     const globeRotationMatrix = new THREE.Matrix4().makeRotationY(this.globe.rotation.y);
     const rotatedStartPoint = startPoint.clone().applyMatrix4(globeRotationMatrix);
     const rotatedMidPoint = midPoint.clone().applyMatrix4(globeRotationMatrix);
     const rotatedEndPoint = endPoint.clone().applyMatrix4(globeRotationMatrix);
-
+  
     // Crea un elemento nella coda di zoom
     const zoomItem: ZoomQueueItem = {
       attack,
@@ -714,23 +713,162 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       midPosition: this.getZoomCameraPosition(rotatedMidPoint, 2.5),
       endPosition: this.getZoomCameraPosition(rotatedEndPoint, 2.0),
       duration: attackVisual.lifetime * 0.8,
-      state: 'active',
+      state: 'pending',  // Cambiato da 'active' a 'pending'
       followProgress: 0,
       startTime: Date.now()
     };
-
-    // Inizia immediatamente lo zoom
-    this.currentZoomItem = zoomItem;
-    this.isZooming = true;
-
+  
     // Salva la posizione attuale della camera per l'interpolazione
     this.initialCameraPosition.copy(this.camera.position);
     this.initialCameraLookAt.copy(this.controls.target);
-
+  
+    // Imposta lo zoom item corrente e avvia la transizione
+    this.currentZoomItem = zoomItem;
+    this.isZooming = true;
+    
     // Disabilita temporaneamente i controlli manuali durante lo zoom
     this.controls.enabled = false;
   }
-
+  
+  // Nuovo metodo per gestire la transizione iniziale
+  private updateInitialTransition(item: ZoomQueueItem, now: number): boolean {
+    if (item.state !== 'pending') return false;
+    
+    // Calcola il tempo trascorso per la transizione iniziale (più breve, 0.7 secondi)
+    const initialTransitionDuration = 500; // 2000ms per la transizione iniziale
+    const elapsed = now - (item.startTime || now);
+    const progress = Math.min(elapsed / initialTransitionDuration, 1.0);
+    
+    // Se la transizione iniziale è completata
+    if (progress >= 1.0) {
+      item.state = 'active';
+      return false;
+    }
+    
+    // Calcola la posizione della camera con easing
+    const smoothT = this.easeInOutCubic(progress);
+    
+    // Interpola dalla posizione iniziale alla posizione di partenza dell'attacco
+    this.camera.position.lerpVectors(
+      this.initialCameraPosition,
+      item.startPosition,
+      smoothT
+    );
+    
+    // Ottieni un punto intermedio tra la posizione attuale del target e quella dell'attacco
+    const attackVisual = this.activeAttacks.get(item.attack.id);
+    if (attackVisual) {
+      const curve = attackVisual.curve;
+      const startPoint = curve.getPoint(0);
+      
+      // Applica la rotazione del globo
+      const rotatedStartPoint = startPoint.clone();
+      const globeRotationMatrix = new THREE.Matrix4().makeRotationY(this.globe.rotation.y);
+      rotatedStartPoint.applyMatrix4(globeRotationMatrix);
+      
+      // Interpola verso il punto iniziale dell'attacco
+      this.controls.target.lerpVectors(
+        this.initialCameraLookAt,
+        rotatedStartPoint,
+        smoothT
+      );
+    }
+    
+    this.controls.update();
+    return true;
+  }
+  
+  // Metodo updateZoom modificato per includere la transizione iniziale
+  private updateZoom(delta: number): void {
+    if (!this.isZooming || !this.currentZoomItem) {
+      return;
+    }
+  
+    const item = this.currentZoomItem;
+    const now = Date.now();
+    
+    // Gestisci prima la transizione iniziale se necessario
+    if (this.updateInitialTransition(item, now)) {
+      return; // Se stiamo ancora nella transizione iniziale, non procedere oltre
+    }
+    
+    // Continua con la normale logica di tracciamento dell'attacco
+    const elapsed = now - (item.startTime || now);
+    const progress = Math.min(elapsed / item.duration, 1.0);
+    
+    // Aggiorna il progresso di tracciamento dell'attacco
+    item.followProgress = progress;
+  
+    // Calcola la posizione della camera per seguire l'attacco
+    const attackVisual = this.activeAttacks.get(item.attack.id);
+    
+    if (attackVisual) {
+      // Controlla se l'attacco è ancora attivo
+      const attackAge = now - attackVisual.startTime;
+      
+      // Se l'attacco è terminato o la durata dell'animazione è completata
+      if (attackAge >= attackVisual.lifetime || progress >= 1.0) {
+        // Completa l'animazione
+        this.completeCurrentZoom();
+        return;
+      }
+  
+      // Traccia solo la prima particella invece della media di tutte
+      let particleProgress = 0;
+      const particleData = attackVisual.particles.userData['particles'];
+      
+      if (particleData && particleData.length > 0) {
+        // Usa solo la prima particella per determinare la posizione
+        particleProgress = particleData[0].t;
+        
+        // Assicurati che non arrivi esattamente a 1.0 per evitare scatti
+        if (particleProgress > 0.98) {
+          particleProgress = 0.98;
+        }
+      }
+  
+      // Usa il progresso della prima particella per determinare la posizione dell'animazione
+      let cameraPos: THREE.Vector3;
+      let lookAtPos: THREE.Vector3;
+      
+      if (particleProgress < 0.5) {
+        // Prima metà del percorso: dall'origine al punto medio
+        const t = particleProgress * 2; // Normalizza da 0-0.5 a 0-1
+        cameraPos = new THREE.Vector3().lerpVectors(item.startPosition, item.midPosition, t);
+        
+        // Ottieni il punto corrente sulla curva come target
+        const curvePos = attackVisual.curve.getPoint(particleProgress);
+        // Applica la rotazione del globo
+        const rotatedCurvePos = curvePos.clone();
+        const globeRotationMatrix = new THREE.Matrix4().makeRotationY(this.globe.rotation.y);
+        rotatedCurvePos.applyMatrix4(globeRotationMatrix);
+        lookAtPos = rotatedCurvePos;
+      } else {
+        // Seconda metà del percorso: dal punto medio alla destinazione
+        const t = (particleProgress - 0.5) * 2; // Normalizza da 0.5-1 a 0-1
+        cameraPos = new THREE.Vector3().lerpVectors(item.midPosition, item.endPosition, t);
+        
+        // Ottieni il punto corrente sulla curva come target
+        const curvePos = attackVisual.curve.getPoint(particleProgress);
+        // Applica la rotazione del globo
+        const rotatedCurvePos = curvePos.clone();
+        const globeRotationMatrix = new THREE.Matrix4().makeRotationY(this.globe.rotation.y);
+        rotatedCurvePos.applyMatrix4(globeRotationMatrix);
+        lookAtPos = rotatedCurvePos;
+      }
+  
+      // Applica l'easing per una transizione più fluida
+      const smoothT = this.easeInOutCubic(progress);
+      
+      // Aggiorna la posizione della camera
+      this.camera.position.copy(cameraPos);
+      this.controls.target.copy(lookAtPos);
+      this.controls.update();
+    } else {
+      // Se l'attacco non è più attivo, termina l'animazione
+      this.completeCurrentZoom();
+    }
+  }
   // Ottieni la posizione della camera in base a un punto sulla superficie del globo
   private getZoomCameraPosition(point: THREE.Vector3, distanceFactor: number): THREE.Vector3 {
     // Calcola la posizione dalla quale guardare il punto target
@@ -738,92 +876,7 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     const cameraPos = dir.multiplyScalar(this.radius * distanceFactor);
     return cameraPos;
   }
-
-
-  // Aggiorna l'animazione di zoom durante il ciclo di rendering  
-private updateZoom(delta: number): void {
-  if (!this.isZooming || !this.currentZoomItem) {
-    return;
-  }
-
-  const item = this.currentZoomItem;
-  const now = Date.now();
-  const elapsed = now - (item.startTime || now);
-  const progress = Math.min(elapsed / item.duration, 1.0);
-  
-  // Aggiorna il progresso di tracciamento dell'attacco
-  item.followProgress = progress;
-
-  // Calcola la posizione della camera per seguire l'attacco
-  const attackVisual = this.activeAttacks.get(item.attack.id);
-  
-  if (attackVisual) {
-    // Controlla se l'attacco è ancora attivo
-    const attackAge = now - attackVisual.startTime;
-    
-    // Se l'attacco è terminato o la durata dell'animazione è completata
-    if (attackAge >= attackVisual.lifetime || progress >= 1.0) {
-      // Completa l'animazione
-      this.completeCurrentZoom();
-      return;
-    }
-
-    // MODIFICA: Traccia solo la prima particella invece della media di tutte
-    let particleProgress = 0;
-    const particleData = attackVisual.particles.userData['particles'];
-    
-    if (particleData && particleData.length > 0) {
-      // Usa solo la prima particella per determinare la posizione
-      particleProgress = particleData[0].t;
-      
-      // Assicurati che non arrivi esattamente a 1.0 per evitare scatti
-      if (particleProgress > 0.98) {
-        particleProgress = 0.98;
-      }
-    }
-
-    // Usa il progresso della prima particella per determinare la posizione dell'animazione
-    let cameraPos: THREE.Vector3;
-    let lookAtPos: THREE.Vector3;
-    
-    if (particleProgress < 0.5) {
-      // Prima metà del percorso: dall'origine al punto medio
-      const t = particleProgress * 2; // Normalizza da 0-0.5 a 0-1
-      cameraPos = new THREE.Vector3().lerpVectors(item.startPosition, item.midPosition, t);
-      
-      // Ottieni il punto corrente sulla curva come target
-      const curvePos = attackVisual.curve.getPoint(particleProgress);
-      // Applica la rotazione del globo
-      const rotatedCurvePos = curvePos.clone();
-      const globeRotationMatrix = new THREE.Matrix4().makeRotationY(this.globe.rotation.y);
-      rotatedCurvePos.applyMatrix4(globeRotationMatrix);
-      lookAtPos = rotatedCurvePos;
-    } else {
-      // Seconda metà del percorso: dal punto medio alla destinazione
-      const t = (particleProgress - 0.5) * 2; // Normalizza da 0.5-1 a 0-1
-      cameraPos = new THREE.Vector3().lerpVectors(item.midPosition, item.endPosition, t);
-      
-      // Ottieni il punto corrente sulla curva come target
-      const curvePos = attackVisual.curve.getPoint(particleProgress);
-      // Applica la rotazione del globo
-      const rotatedCurvePos = curvePos.clone();
-      const globeRotationMatrix = new THREE.Matrix4().makeRotationY(this.globe.rotation.y);
-      rotatedCurvePos.applyMatrix4(globeRotationMatrix);
-      lookAtPos = rotatedCurvePos;
-    }
-
-    // Applica l'easing per una transizione più fluida
-    const smoothT = this.easeInOutCubic(progress);
-    
-    // Aggiorna la posizione della camera
-    this.camera.position.copy(cameraPos);
-    this.controls.target.copy(lookAtPos);
-    this.controls.update();
-  } else {
-    // Se l'attacco non è più attivo, termina l'animazione
-    this.completeCurrentZoom();
-  }
-}
+ 
 
   // Completa l'animazione di zoom corrente
   private completeCurrentZoom(): void {
@@ -1196,10 +1249,25 @@ private updateZoom(delta: number): void {
     });
   }
 
-  // Funzioni di easing per animazioni fluide
-  private easeInOutCubic(x: number): number {
-    return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
-  }
+  // Funzione di Easing migliorata per movimenti più fluidi
+private easeInOutCubic(x: number): number {
+  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+}
+
+// Aggiungiamo una funzione di easing più dolce per l'inizio
+private easeOutQuint(x: number): number {
+  return 1 - Math.pow(1 - x, 5);
+}
+
+// Aggiunta di una funzione di Easing con elasticità per un effetto più naturale 
+private easeOutElastic(x: number): number {
+  const c4 = (2 * Math.PI) / 3;
+  return x === 0
+    ? 0
+    : x === 1
+    ? 1
+    : Math.pow(2, -10 * x) * Math.sin((x * 10 - 0.75) * c4) + 1;
+}
 
   private easeOutQuart(x: number): number {
     return 1 - Math.pow(1 - x, 4);
