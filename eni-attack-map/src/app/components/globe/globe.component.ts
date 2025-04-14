@@ -10,9 +10,12 @@ import { environment } from '../../../environment';
 interface AttackVisual {
   line: THREE.Line;
   particles: THREE.Points;
+  directionMarkers?: THREE.Points;
+  impactEffects: THREE.Object3D[];
   startTime: number;
   attack: Attack;
   lifetime: number;
+  completed: boolean;
 }
 
 interface PopupData {
@@ -198,6 +201,7 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     this.createStarLayer(this.starCount * 0.3, 500, 0.9); // Layer medio
     this.createStarLayer(this.starCount * 0.1, 700, 1.0); // Layer interno, più veloce
   }
+
   private createStarLayer(count: number, radius: number, speedFactor: number): void {
     // Geometria per le stelle
     const starsGeometry = new THREE.BufferGeometry();
@@ -416,30 +420,34 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     // Get color based on attack type
     const color = this.getColorForAttackType(attack.type);
 
-    // Create line material
-    const lineMaterial = new THREE.LineBasicMaterial({
+    // Create line material with gradient effect
+    // Usiamo LineDashedMaterial per un effetto tratteggiato che aiuta a visualizzare la direzione
+    const lineMaterial = new THREE.LineDashedMaterial({
       color: color,
+      dashSize: 3,
+      gapSize: 1,
       transparent: true,
-      opacity: 0.8,
-      linewidth: 1 + attack.intensity / 2 // Thicker for more intense attacks
+      opacity: 0.7,
+      linewidth: 1 + attack.intensity / 3
     });
 
     // Create line mesh
     const line = new THREE.Line(lineGeometry, lineMaterial);
+    line.computeLineDistances(); // Necessario per LineDashedMaterial
 
     // MODIFICA: Aggiungi la linea al globo invece che alla scena
     this.globe.add(line);
 
     // Create particles to flow along the line
     const particleGeometry = new THREE.BufferGeometry();
-    const particlePositions = new Float32Array(50 * 3);
+    const particleCount = 20 + attack.intensity; // Più particelle per attacchi più intensi
+    const particlePositions = new Float32Array(particleCount * 3);
 
-    // Set initial particle positions along the curve
-    for (let i = 0; i < 50; i++) {
-      const point = curve.getPoint(i / 49);
-      particlePositions[i * 3] = point.x;
-      particlePositions[i * 3 + 1] = point.y;
-      particlePositions[i * 3 + 2] = point.z;
+    // Set initial particle positions at the source with small random offsets
+    for (let i = 0; i < particleCount; i++) {
+      particlePositions[i * 3] = sourcePos.x + (Math.random() - 0.5) * 2;
+      particlePositions[i * 3 + 1] = sourcePos.y + (Math.random() - 0.5) * 2;
+      particlePositions[i * 3 + 2] = sourcePos.z + (Math.random() - 0.5) * 2;
     }
 
     particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
@@ -449,29 +457,203 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       color: color,
       size: 1.5 + (attack.intensity * 0.1),
       transparent: true,
-      opacity: 0.8,
+      opacity: 0.9,
       blending: THREE.AdditiveBlending
     });
 
     // Create particle system
     const particles = new THREE.Points(particleGeometry, particleMaterial);
+    particles.userData = {
+      curve: curve,
+      particles: Array.from({ length: particleCount }, () => ({
+        t: 0,
+        speed: 0.002 + (Math.random() * 0.002) + (attack.intensity * 0.0005) // Velocità variabile basata sull'intensità
+      }))
+    };
 
     // MODIFICA: Aggiungi le particelle al globo invece che alla scena
     this.globe.add(particles);
+
+    // Preparare l'array per gli effetti di impatto (inizialmente vuoto)
+    const impactEffects: THREE.Object3D[] = [];
 
     // Store reference to attack visualization
     this.activeAttacks.set(attack.id, {
       line,
       particles,
+      impactEffects,
       startTime: Date.now(),
       attack,
-      lifetime: 10000 + (attack.intensity * 500) // Lifetime based on intensity
+      lifetime: 5000 + (attack.intensity * 300),
+      completed: false
     });
 
     // Show popup for high-intensity attacks
     if (attack.intensity >= environment.popup.intensityThreshold) {
       this.showPopup(attack);
     }
+  }
+
+  private createParticleTexture(): THREE.Texture {
+    const canvas = document.createElement('canvas');
+    const size = 128;
+    canvas.width = size;
+    canvas.height = size;
+
+    const context = canvas.getContext('2d');
+    if (context) {
+      const gradient = context.createRadialGradient(
+        size / 2, size / 2, 0,
+        size / 2, size / 2, size / 2
+      );
+
+      gradient.addColorStop(0, 'rgba(255,255,255,1)');
+      gradient.addColorStop(0.3, 'rgba(255,255,255,0.8)');
+      gradient.addColorStop(0.5, 'rgba(255,255,255,0.4)');
+      gradient.addColorStop(1, 'rgba(255,255,255,0)');
+
+      context.fillStyle = gradient;
+      context.fillRect(0, 0, size, size);
+    }
+
+    const texture = new THREE.Texture(canvas);
+    texture.needsUpdate = true;
+    return texture;
+  }
+
+  private createImpactEffect(position: THREE.Vector3, color: THREE.Color, intensity: number): THREE.Object3D[] {
+    const effects: THREE.Object3D[] = [];
+
+    // 1. Sfera di luce pulsante invece di un punto luce semplice
+    const glowGeometry = new THREE.SphereGeometry(3 + intensity * 0.3, 32, 32);
+    const glowMaterial = new THREE.MeshBasicMaterial({
+      color: color,
+      transparent: true,
+      opacity: 0.7,
+      blending: THREE.AdditiveBlending
+    });
+
+    const glowSphere = new THREE.Mesh(glowGeometry, glowMaterial);
+    glowSphere.position.copy(position);
+    this.globe.add(glowSphere);
+    effects.push(glowSphere);
+
+    // Aggiunge una piccola luce con una portata limitata
+    const impactLight = new THREE.PointLight(color, 2 + intensity / 2, 10);
+    impactLight.position.copy(position);
+    this.globe.add(impactLight);
+    effects.push(impactLight);
+
+    // 2. Anelli multipli (da 2 a 4 in base all'intensità) che si espandono a velocità diverse
+    const ringCount = 2 + Math.floor(intensity / 4); // Da 2 a 4 anelli
+
+    for (let i = 0; i < ringCount; i++) {
+      const ringGeometry = new THREE.RingGeometry(0.01, 0.05, 32); // Dimensioni ridotte a 1/10
+      const ringMaterial = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0.6,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending
+      });
+
+      const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+      ring.position.copy(position);
+      ring.lookAt(new THREE.Vector3(0, 0, 0)); // Orienta verso il centro del globo
+      ring.userData = {
+        expansionSpeed: 0.01 + (Math.random() * 0.01) + (intensity * 0.001), // Velocità ridotta a 1/10
+        initialDelay: i * 200 // ms - delay per ogni anello successivo
+      };
+
+      this.globe.add(ring);
+      effects.push(ring);
+    }
+
+    // 3. Sistema di particelle più sofisticato (usando ShaderMaterial per effetti più avanzati)
+    const particleCount = 20 + Math.floor(intensity * 3);
+    const particleGeometry = new THREE.BufferGeometry();
+    const particlePositions = new Float32Array(particleCount * 3);
+    const particleSizes = new Float32Array(particleCount);
+
+    // Posizioni iniziali in una sfera intorno al punto di impatto
+    for (let i = 0; i < particleCount; i++) {
+      const radius = Math.random() * 2;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+
+      const x = position.x + radius * Math.sin(phi) * Math.cos(theta);
+      const y = position.y + radius * Math.sin(phi) * Math.sin(theta);
+      const z = position.z + radius * Math.cos(phi);
+
+      particlePositions[i * 3] = x;
+      particlePositions[i * 3 + 1] = y;
+      particlePositions[i * 3 + 2] = z;
+
+      // Dimensioni variabili
+      particleSizes[i] = 1 + Math.random() * 2;
+    }
+
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    particleGeometry.setAttribute('size', new THREE.BufferAttribute(particleSizes, 1));
+
+    // Materiale shader personalizzato per particelle più belle
+    const particleMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        color: { value: color },
+        pointTexture: { value: this.createParticleTexture() }
+      },
+      vertexShader: `
+        attribute float size;
+        varying vec3 vColor;
+        void main() {
+          vColor = vec3(1.0, 1.0, 1.0);
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = size * (300.0 / -mvPosition.z);
+          gl_Position = projectionMatrix * mvPosition;
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 color;
+        uniform sampler2D pointTexture;
+        varying vec3 vColor;
+        void main() {
+          gl_FragColor = vec4(color * vColor, 1.0);
+          gl_FragColor = gl_FragColor * texture2D(pointTexture, gl_PointCoord);
+        }
+      `,
+      blending: THREE.AdditiveBlending,
+      depthTest: false,
+      transparent: true
+    });
+
+    const particles = new THREE.Points(particleGeometry, particleMaterial);
+    particles.userData = {
+      velocities: Array.from({ length: particleCount }, () => {
+        // Direzione di espansione radiale dal centro più randomizzazione
+        const dirVector = new THREE.Vector3(
+          position.x + (Math.random() - 0.5) * 0.5,
+          position.y + (Math.random() - 0.5) * 0.5,
+          position.z + (Math.random() - 0.5) * 0.5
+        ).normalize();
+
+        return new THREE.Vector3(
+          dirVector.x * (0.01 + Math.random() * 0.02) * (1 + intensity * 0.005),
+          dirVector.y * (0.01 + Math.random() * 0.02) * (1 + intensity * 0.005),
+          dirVector.z * (0.01 + Math.random() * 0.02) * (1 + intensity * 0.005)
+        );
+      }),
+      lifespans: Array.from({ length: particleCount }, () =>
+        500 + Math.random() * 1000 // Durata di vita variabile tra 500ms e 1500ms
+      ),
+      startTimes: Array.from({ length: particleCount }, () =>
+        Date.now() + Math.random() * 500 // Inizio ritardato casuale (0-500ms)
+      )
+    };
+
+    this.globe.add(particles);
+    effects.push(particles);
+
+    return effects;
   }
 
   private getColorForAttackType(type: string): THREE.Color {
@@ -485,25 +667,25 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       attack.target.lng,
       this.radius
     );
-    
+
     // Applica la rotazione corrente del globo al punto target
     const rotatedTargetPos = targetPos.clone();
     const globeRotationMatrix = new THREE.Matrix4().makeRotationY(this.globe.rotation.y);
     rotatedTargetPos.applyMatrix4(globeRotationMatrix);
-  
+
     // Calculate a position to zoom to
     const zoomVector = rotatedTargetPos.clone().normalize().multiplyScalar(this.radius * 2.0);
-  
+
     // Set the target zoom
     this.targetZoom = {
       position: zoomVector,
       lookAt: rotatedTargetPos
     };
-  
+
     // Save the current camera position for smooth transition
     this.initialCameraPosition.copy(this.camera.position);
     this.initialCameraLookAt.copy(this.controls.target);
-  
+
     // Start the zoom animation
     this.zoomStartTime = Date.now();
   }
@@ -619,8 +801,6 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       starLayer.rotation.y -= this.rotationSpeed * speedFactor;
     });
 
-    // Il resto del codice animate rimane uguale...
-
     // Update orbital controls
     this.controls.update();
 
@@ -631,37 +811,135 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // Remove expired attacks
       if (age > attackVisual.lifetime) {
-        this.globe.remove(attackVisual.line);
-        this.globe.remove(attackVisual.particles);
+        // Rimuovi la linea
+        if (attackVisual.line) {
+          this.globe.remove(attackVisual.line);
+          if (attackVisual.line.geometry) {
+            attackVisual.line.geometry.dispose();
+          }
+          if (attackVisual.line.material) {
+            if (Array.isArray(attackVisual.line.material)) {
+              attackVisual.line.material.forEach(m => m.dispose());
+            } else {
+              attackVisual.line.material.dispose();
+            }
+          }
+        }
+
+        // Rimuovi le particelle
+        if (attackVisual.particles) {
+          this.globe.remove(attackVisual.particles);
+          if (attackVisual.particles.geometry) {
+            attackVisual.particles.geometry.dispose();
+          }
+          if (attackVisual.particles.material) {
+            if (Array.isArray(attackVisual.particles.material)) {
+              attackVisual.particles.material.forEach(m => m.dispose());
+            } else {
+              attackVisual.particles.material.dispose();
+            }
+          }
+        }
+
+        // Rimuovi i marker direzionali
+        if (attackVisual.directionMarkers) {
+          this.globe.remove(attackVisual.directionMarkers);
+          if (attackVisual.directionMarkers.geometry) {
+            attackVisual.directionMarkers.geometry.dispose();
+          }
+          if (attackVisual.directionMarkers.material) {
+            if (Array.isArray(attackVisual.directionMarkers.material)) {
+              attackVisual.directionMarkers.material.forEach(m => m.dispose());
+            } else {
+              attackVisual.directionMarkers.material.dispose();
+            }
+          }
+        }
+
+        // Rimuovi gli effetti di impatto
+        if (attackVisual.impactEffects && attackVisual.impactEffects.length > 0) {
+          attackVisual.impactEffects.forEach(effect => {
+            this.globe.remove(effect);
+            if (effect instanceof THREE.Mesh || effect instanceof THREE.Points) {
+              if (effect.geometry) {
+                effect.geometry.dispose();
+              }
+              if (effect.material) {
+                if (Array.isArray(effect.material)) {
+                  effect.material.forEach(m => m.dispose());
+                } else {
+                  effect.material.dispose();
+                }
+              }
+            }
+          });
+          // Svuota l'array degli effetti
+          attackVisual.impactEffects = [];
+        }
+
         this.activeAttacks.delete(id);
         return;
       }
 
-      // Animate particles along the line
+      // Se l'attacco è completo, aggiorna solo gli effetti di impatto
+      if (attackVisual.completed) {
+        this.updateImpactEffects(attackVisual, age);
+        return;
+      }
+
+      // Animate particles along the curve
       const positions = (attackVisual.particles.geometry as THREE.BufferGeometry).attributes['position'].array;
       const particleCount = positions.length / 3;
+      const curve = attackVisual.particles.userData['curve'] as THREE.QuadraticBezierCurve3;
+      const particleData = attackVisual.particles.userData['particles'];
+      let allParticlesArrived = true;
 
-      // Movement speed proportional to attack intensity
-      const speed = 0.1 + (attackVisual.attack.intensity * 0.05);
+      // Aggiornare la posizione di ogni particella lungo la curva
+      for (let i = 0; i < particleCount; i++) {
+        const particle = particleData[i];
+        particle.t += particle.speed;
 
-      // Move particles along the line
-      for (let i = 0; i < particleCount - 1; i++) {
-        positions[i * 3] = positions[(i + 1) * 3];
-        positions[i * 3 + 1] = positions[(i + 1) * 3 + 1];
-        positions[i * 3 + 2] = positions[(i + 1) * 3 + 2];
+        // Se la particella ha raggiunto la destinazione, tenerla lì
+        if (particle.t >= 1) {
+          particle.t = 1;
+        } else {
+          // Se almeno una particella non è ancora arrivata, l'attacco non è completo
+          allParticlesArrived = false;
+        }
+
+        // Calcola la nuova posizione lungo la curva
+        const pos = curve.getPoint(particle.t);
+
+        // Aggiorna la posizione della particella
+        positions[i * 3] = pos.x;
+        positions[i * 3 + 1] = pos.y;
+        positions[i * 3 + 2] = pos.z;
       }
+
+      // Se tutte le particelle sono arrivate e l'attacco non è ancora segnato come completato
+      if (allParticlesArrived && !attackVisual.completed) {
+        attackVisual.completed = true;
+
+        // Crea l'effetto di impatto al punto di destinazione
+        const targetPos = curve.getPoint(1);
+        const color = this.getColorForAttackType(attackVisual.attack.type);
+        const impactEffects = this.createImpactEffect(targetPos, color, attackVisual.attack.intensity);
+
+        // Memorizza gli effetti di impatto
+        attackVisual.impactEffects = impactEffects;
+      }
+
+      // Aggiorna la geometria per visualizzare le nuove posizioni
+      (attackVisual.particles.geometry as THREE.BufferGeometry).attributes['position'].needsUpdate = true;
 
       // Blink effect for high-intensity attacks
       if (attackVisual.attack.intensity >= environment.popup.intensityThreshold) {
         const blinkFrequency = 100 + (10 - attackVisual.attack.intensity) * 50; // Higher intensity = faster blinking
         const blink = Math.sin(age / blinkFrequency) > 0;
 
-        (attackVisual.line.material as THREE.LineBasicMaterial).opacity = blink ? 1 : 0.3;
-        (attackVisual.particles.material as THREE.PointsMaterial).opacity = blink ? 1 : 0.3;
+        (attackVisual.line.material as THREE.LineDashedMaterial).opacity = blink ? 0.9 : 0.4;
+        (attackVisual.particles.material as THREE.PointsMaterial).opacity = blink ? 1 : 0.5;
       }
-
-      // Update geometry
-      (attackVisual.particles.geometry as THREE.BufferGeometry).attributes['position'].needsUpdate = true;
     });
 
     // Calculate screen position for popup
@@ -671,21 +949,21 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
         this.popupData.attack.target.lng,
         this.radius
       );
-      
+
       // Crea un vettore che tenga conto della rotazione del globo
       const rotatedPos = targetPos.clone();
-      
+
       // Applica la stessa rotazione del globo
       const globeRotationMatrix = new THREE.Matrix4().makeRotationY(this.globe.rotation.y);
       rotatedPos.applyMatrix4(globeRotationMatrix);
-      
+
       // Project 3D position to 2D screen coordinates
       rotatedPos.project(this.camera);
-    
+
       // Convert to pixel coordinates
       const x = (rotatedPos.x * 0.5 + 0.5) * window.innerWidth;
       const y = (-rotatedPos.y * 0.5 + 0.5) * window.innerHeight;
-    
+
       // Update popup position in Angular zone
       if (this.popupData.position?.x !== x || this.popupData.position?.y !== y) {
         this.ngZone.run(() => {
@@ -696,5 +974,89 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Render the scene
     this.renderer.render(this.scene, this.camera);
+  }
+
+  private updateImpactEffects(attackVisual: AttackVisual, age: number): void {
+    // Tempo trascorso dall'impatto
+    const impactAge = age - (attackVisual.lifetime / 2);
+
+    // Fattore di vita (1.0 all'inizio, 0.0 alla fine)
+    const lifeFactor = Math.max(0, 1 - (impactAge / (attackVisual.lifetime / 2)));
+    const lifeFactorSmooth = this.easeOutQuart(lifeFactor); // Applicazione di easing
+
+    attackVisual.impactEffects.forEach((effect) => {
+      // Effetto sfera luminosa pulsante
+      if (effect instanceof THREE.Mesh && effect.geometry instanceof THREE.SphereGeometry) {
+        // Pulse effect
+        const pulseScale = 1 + (0.2 * Math.sin(impactAge / 100));
+        effect.scale.set(pulseScale, pulseScale, pulseScale);
+
+        // Dissolvenza
+        (effect.material as THREE.MeshBasicMaterial).opacity = lifeFactorSmooth * 0.7;
+      }
+      // Effetto point light
+      else if (effect instanceof THREE.PointLight) {
+        // Pulse intensity
+        effect.intensity = lifeFactorSmooth * (2 + attackVisual.attack.intensity / 2) *
+          (0.8 + 0.2 * Math.sin(impactAge / 80));
+      }
+      // Anelli in espansione
+      else if (effect instanceof THREE.Mesh && effect.geometry instanceof THREE.RingGeometry) {
+        const initialDelay = effect.userData['initialDelay'] || 0;
+
+        // Aspetta il ritardo iniziale
+        if (impactAge > initialDelay) {
+          const effectAge = impactAge - initialDelay;
+          const expansionSpeed = effect.userData['expansionSpeed'] || 0.1;
+
+          // Espansione
+          const scale = 1 + (effectAge * expansionSpeed);
+          effect.scale.set(scale, scale, scale);
+
+          // Dissolvenza con easing
+          const ringLifefactor = Math.max(0, 1 - (effectAge / (attackVisual.lifetime / 1.5)));
+          (effect.material as THREE.MeshBasicMaterial).opacity = ringLifefactor * 0.6;
+        }
+      }
+      // Sistema di particelle
+      else if (effect instanceof THREE.Points) {
+        const positions = (effect.geometry as THREE.BufferGeometry).attributes['position'].array;
+        const velocities = effect.userData['velocities'];
+        const lifespans = effect.userData['lifespans'];
+        const startTimes = effect.userData['startTimes'];
+        const particleCount = velocities.length;
+        const now = Date.now();
+
+        for (let i = 0; i < particleCount; i++) {
+          const particleAge = now - startTimes[i];
+
+          // Aggiorna solo se la particella è attiva
+          if (particleAge > 0 && particleAge < lifespans[i]) {
+            const particleLifeFactor = 1 - (particleAge / lifespans[i]);
+
+            // Aggiorna posizione con velocità decelerata
+            positions[i * 3] += velocities[i].x * particleLifeFactor;
+            positions[i * 3 + 1] += velocities[i].y * particleLifeFactor;
+            positions[i * 3 + 2] += velocities[i].z * particleLifeFactor;
+
+            // Rallentamento graduale
+            velocities[i].multiplyScalar(0.97);
+          }
+        }
+
+        (effect.geometry as THREE.BufferGeometry).attributes['position'].needsUpdate = true;
+
+        // Dissolvenza generale
+        if (effect.material instanceof THREE.ShaderMaterial) {
+          effect.material.opacity = lifeFactorSmooth;
+        } else if (effect.material instanceof THREE.PointsMaterial) {
+          effect.material.opacity = lifeFactorSmooth * 0.8;
+        }
+      }
+    });
+  }
+
+  private easeOutQuart(x: number): number {
+    return 1 - Math.pow(1 - x, 4);
   }
 }

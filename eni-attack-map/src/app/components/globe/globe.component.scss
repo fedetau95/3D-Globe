@@ -1,220 +1,250 @@
 :host {
-  display: block;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   width: 100%;
-  height: 100%;
-  overflow: hidden;
+  height: 100vh;
+  background-color: #000;
   position: relative;
+  overflow: hidden;
 }
 
 canvas {
   display: block;
   width: 100%;
   height: 100%;
-  background-color: #000;
 }
 
 .controls {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
+  top: 20px;
+  right: 20px;
   width: 300px;
-  color: white;
+  color: #fff;
   font-family: 'Arial', sans-serif;
-  z-index: 100;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .stats-panel {
   background-color: rgba(0, 0, 0, 0.7);
   border-radius: 8px;
-  padding: 1rem;
-  margin-bottom: 1rem;
-  
-  h2 {
-    margin-top: 0;
-    font-size: 1.2rem;
-    color: #fff;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    padding-bottom: 0.5rem;
-  }
-  
-  h3 {
-    font-size: 1rem;
-    margin: 0.5rem 0;
-    color: #ccc;
-  }
-  
-  ul {
-    list-style: none;
-    padding: 0;
-    margin: 0 0 1rem 0;
-    
-    li {
-      display: flex;
-      justify-content: space-between;
-      padding: 0.3rem 0;
-      font-size: 0.9rem;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-      
-      &:last-child {
-        border-bottom: none;
-      }
-      
-      .count {
-        font-weight: bold;
-        color: #4fc3f7;
-      }
-      
-      // Colors for attack types
-      &.dos {
-        color: #ff5252;
-        .count { color: #ff5252; }
-      }
-      
-      &.malware {
-        color: #ff9800;
-        .count { color: #ff9800; }
-      }
-      
-      &.phishing {
-        color: #ffeb3b;
-        .count { color: #ffeb3b; }
-      }
-      
-      &.ransomware {
-        color: #e040fb;
-        .count { color: #e040fb; }
-      }
-      
-      &.sql {
-        color: #18ffff;
-        .count { color: #18ffff; }
-      }
-    }
-  }
+  padding: 15px;
+  box-shadow: 0 0 20px rgba(0, 100, 255, 0.3);
+  border: 1px solid rgba(0, 100, 255, 0.3);
+}
+
+.stats-panel h2 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1.5rem;
+  text-align: center;
+  color: #00a8ff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  padding-bottom: 8px;
+}
+
+.stats-panel h3 {
+  margin-top: 15px;
+  margin-bottom: 10px;
+  font-size: 1.2rem;
+  color: #00a8ff;
+}
+
+.stats-panel ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.stats-panel li {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.stats-panel .count {
+  font-weight: bold;
+}
+
+/* Colori per i vari tipi di attacco */
+.dos {
+  color: #ff5555;
+}
+
+.malware {
+  color: #ffaa44;
+}
+
+.phishing {
+  color: #ffff44;
+}
+
+.ransomware {
+  color: #ff44ff;
+}
+
+.sql {
+  color: #44ffff;
 }
 
 .legend {
   background-color: rgba(0, 0, 0, 0.7);
   border-radius: 8px;
-  padding: 1rem;
-  
-  h3 {
-    font-size: 1rem;
-    margin: 0 0 0.5rem 0;
-    color: #ccc;
-  }
-  
-  ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    
-    li {
-      display: flex;
-      align-items: center;
-      padding: 0.2rem 0;
-      font-size: 0.9rem;
-      
-      .color-box {
-        display: inline-block;
-        width: 12px;
-        height: 12px;
-        margin-right: 8px;
-        border-radius: 2px;
-      }
-      
-      .dos { background-color: #ff0000; }
-      .malware { background-color: #ff8800; }
-      .phishing { background-color: #ffff00; }
-      .ransomware { background-color: #ff00ff; }
-      .sql { background-color: #00ffff; }
-    }
-  }
+  padding: 15px;
+  box-shadow: 0 0 20px rgba(0, 100, 255, 0.3);
+  border: 1px solid rgba(0, 100, 255, 0.3);
+}
+
+.legend h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 1.2rem;
+  color: #00a8ff;
+  text-align: center;
+}
+
+.legend ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.color-box {
+  width: 15px;
+  height: 15px;
+  margin-right: 10px;
+  border-radius: 3px;
+}
+
+.color-box.dos {
+  background-color: #ff0000;
+  box-shadow: 0 0 8px #ff0000;
+}
+
+.color-box.malware {
+  background-color: #ff8800;
+  box-shadow: 0 0 8px #ff8800;
+}
+
+.color-box.phishing {
+  background-color: #ffff00;
+  box-shadow: 0 0 8px #ffff00;
+}
+
+.color-box.ransomware {
+  background-color: #ff00ff;
+  box-shadow: 0 0 8px #ff00ff;
+}
+
+.color-box.sql {
+  background-color: #00ffff;
+  box-shadow: 0 0 8px #00ffff;
 }
 
 .attack-popup {
   position: absolute;
-  width: 280px;
   background-color: rgba(0, 0, 0, 0.85);
   border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-  color: white;
-  font-family: 'Arial', sans-serif;
-  overflow: hidden;
-  z-index: 200;
+  padding: 0;
+  width: 280px;
   transform: translate(-50%, -100%);
-  margin-top: -20px;
-  animation: popup-fade 0.3s ease-out;
-  
-  &:after {
-    content: '';
-    position: absolute;
-    bottom: -10px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 0;
-    height: 0;
-    border-left: 10px solid transparent;
-    border-right: 10px solid transparent;
-    border-top: 10px solid rgba(0, 0, 0, 0.85);
-  }
-  
-  .header {
-    padding: 0.6rem 1rem;
-    
-    h3 {
-      margin: 0;
-      font-size: 1rem;
-    }
-    
-    // Header colors for different attack types
-    &.dos { 
-      background-color: #ff0000;
-      color: white;
-    }
-    
-    &.malware { 
-      background-color: #ff8800;
-      color: black;
-    }
-    
-    &.phishing { 
-      background-color: #ffff00;
-      color: black;
-    }
-    
-    &.ransomware { 
-      background-color: #ff00ff;
-      color: white;
-    }
-    
-    &.sql { 
-      background-color: #00ffff;
-      color: black;
-    }
-  }
-  
-  .content {
-    padding: 0.8rem 1rem;
-    
-    p {
-      margin: 0.3rem 0;
-      font-size: 0.9rem;
-      
-      strong {
-        color: #4fc3f7;
-      }
-    }
-  }
+  margin-top: -15px;
+  z-index: 20;
+  animation: fadeIn 0.3s ease-out;
+  box-shadow: 0 0 20px rgba(0, 150, 255, 0.5);
+  border: 1px solid rgba(0, 100, 255, 0.5);
+  pointer-events: none;
 }
 
-@keyframes popup-fade {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -90%);
-  }
-  100% {
-    opacity: 1;
-    transform: translate(-50%, -100%);
-  }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translate(-50%, -90%); }
+  to { opacity: 1; transform: translate(-50%, -100%); }
+}
+
+.attack-popup::after {
+  content: '';
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 10px solid rgba(0, 0, 0, 0.85);
+}
+
+.attack-popup .header {
+  padding: 10px 15px;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  text-align: center;
+}
+
+.attack-popup .header.dos {
+  background-color: rgba(255, 0, 0, 0.7);
+  box-shadow: inset 0 0 15px rgba(255, 0, 0, 0.5);
+}
+
+.attack-popup .header.malware {
+  background-color: rgba(255, 136, 0, 0.7);
+  box-shadow: inset 0 0 15px rgba(255, 136, 0, 0.5);
+}
+
+.attack-popup .header.phishing {
+  background-color: rgba(255, 255, 0, 0.7);
+  box-shadow: inset 0 0 15px rgba(255, 255, 0, 0.5);
+}
+
+.attack-popup .header.ransomware {
+  background-color: rgba(255, 0, 255, 0.7);
+  box-shadow: inset 0 0 15px rgba(255, 0, 255, 0.5);
+}
+
+.attack-popup .header.sql {
+  background-color: rgba(0, 255, 255, 0.7);
+  box-shadow: inset 0 0 15px rgba(0, 255, 255, 0.5);
+}
+
+.attack-popup h3 {
+  margin: 0;
+  color: white;
+  font-size: 1.1rem;
+  text-shadow: 0 0 5px rgba(0, 0, 0, 0.7);
+}
+
+.attack-popup .content {
+  padding: 15px;
+}
+
+.attack-popup p {
+  margin: 8px 0;
+  font-size: 0.9rem;
+  color: #ffffff;
+}
+
+.attack-popup strong {
+  color: #00a8ff;
+}
+
+/* Aggiungi un bagliore pulsante durante gli attacchi ad alta intensità */
+@keyframes pulse {
+  0% { box-shadow: 0 0 20px rgba(0, 150, 255, 0.5); }
+  50% { box-shadow: 0 0 30px rgba(0, 150, 255, 0.8); }
+  100% { box-shadow: 0 0 20px rgba(0, 150, 255, 0.5); }
+}
+
+.attack-popup.high-intensity {
+  animation: fadeIn 0.3s ease-out, pulse 1.5s infinite;
 }
