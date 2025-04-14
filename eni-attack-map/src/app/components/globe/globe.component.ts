@@ -471,41 +471,45 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     // MODIFICA: Aggiungi la linea al globo invece che alla scena
     this.globe.add(line);
 
-    // Create particles to flow along the line
     const particleGeometry = new THREE.BufferGeometry();
-    const particleCount = 20 + attack.intensity; // Più particelle per attacchi più intensi
-    const particlePositions = new Float32Array(particleCount * 3);
+const particleCount = 20 + attack.intensity; // Più particelle per attacchi più intensi
+const particlePositions = new Float32Array(particleCount * 3);
 
-    // Set initial particle positions at the source with small random offsets
-    for (let i = 0; i < particleCount; i++) {
-      particlePositions[i * 3] = sourcePos.x + (Math.random() - 0.5) * 2;
-      particlePositions[i * 3 + 1] = sourcePos.y + (Math.random() - 0.5) * 2;
-      particlePositions[i * 3 + 2] = sourcePos.z + (Math.random() - 0.5) * 2;
-    }
+// Set initial particle positions at the source with small random offsets
+for (let i = 0; i < particleCount; i++) {
+  particlePositions[i * 3] = sourcePos.x + (Math.random() - 0.5) * 2;
+  particlePositions[i * 3 + 1] = sourcePos.y + (Math.random() - 0.5) * 2;
+  particlePositions[i * 3 + 2] = sourcePos.z + (Math.random() - 0.5) * 2;
+}
 
-    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
 
-    // Create particle material
-    const particleMaterial = new THREE.PointsMaterial({
-      color: color,
-      size: 1.5 + (attack.intensity * 0.1),
-      transparent: true,
-      opacity: 0.9,
-      blending: THREE.AdditiveBlending
-    });
+// Crea una texture per le particelle (più grande per permettere il bagliore)
+const particleTexture = this.createParticleTexture();
 
-    // Create particle system
-    const particles = new THREE.Points(particleGeometry, particleMaterial);
-    particles.userData = {
-      curve: curve,
-      particles: Array.from({ length: particleCount }, () => ({
-        t: 0,
-        speed: 0.002 + (Math.random() * 0.002) + (attack.intensity * 0.0005) // Velocità variabile basata sull'intensità
-      }))
-    };
+// Create particle material with texture
+const particleMaterial = new THREE.PointsMaterial({
+  color: color,
+  size: 2.5 + (attack.intensity * 0.2),
+  transparent: true,
+  opacity: 0.9,
+  blending: THREE.AdditiveBlending,
+  map: particleTexture, // Usa la texture circolare con bagliore
+  depthWrite: false // Imposta a false per evitare problemi di rendering con la trasparenza
+});
 
-    // MODIFICA: Aggiungi le particelle al globo invece che alla scena
-    this.globe.add(particles);
+// Create particle system
+const particles = new THREE.Points(particleGeometry, particleMaterial);
+particles.userData = {
+  curve: curve,
+  particles: Array.from({ length: particleCount }, () => ({
+    t: 0,
+    speed: 0.002 + (Math.random() * 0.002) + (attack.intensity * 0.0005) // Velocità variabile basata sull'intensità
+  }))
+};
+
+// Aggiungi le particelle al globo invece che alla scena
+this.globe.add(particles);
 
     // Preparare l'array per gli effetti di impatto (inizialmente vuoto)
     const impactEffects: THREE.Object3D[] = [];
@@ -525,30 +529,40 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private createParticleTexture(): THREE.Texture {
     const canvas = document.createElement('canvas');
-    const size = 128;
+    const size = 128; // Aumentato per maggiore dettaglio
     canvas.width = size;
     canvas.height = size;
-
+  
     const context = canvas.getContext('2d');
     if (context) {
+      // Crea un gradiente radiale per un bagliore morbido
       const gradient = context.createRadialGradient(
         size / 2, size / 2, 0,
         size / 2, size / 2, size / 2
       );
-
-      gradient.addColorStop(0, 'rgba(255,255,255,1)');
-      gradient.addColorStop(0.3, 'rgba(255,255,255,0.8)');
-      gradient.addColorStop(0.5, 'rgba(255,255,255,0.4)');
-      gradient.addColorStop(1, 'rgba(255,255,255,0)');
-
+  
+      // Aggiungiamo più stop per un bagliore più raffinato
+      gradient.addColorStop(0.0, 'rgba(255,255,255,1.0)'); // Centro bianco brillante
+      gradient.addColorStop(0.2, 'rgba(255,255,255,0.9)'); // Anello interno quasi bianco
+      gradient.addColorStop(0.4, 'rgba(255,255,255,0.5)'); // Bagliore medio
+      gradient.addColorStop(0.6, 'rgba(255,255,255,0.2)'); // Bagliore esterno debole
+      gradient.addColorStop(1.0, 'rgba(255,255,255,0)');   // Completamente trasparente ai bordi
+  
       context.fillStyle = gradient;
       context.fillRect(0, 0, size, size);
+  
+      // Aggiungi un elemento di brillantezza al centro
+      context.beginPath();
+      context.arc(size / 2, size / 2, size / 8, 0, Math.PI * 2);
+      context.fillStyle = 'rgba(255,255,255,0.8)';
+      context.fill();
     }
-
+  
     const texture = new THREE.Texture(canvas);
     texture.needsUpdate = true;
     return texture;
   }
+  
 
   private createImpactEffect(position: THREE.Vector3, color: THREE.Color, intensity: number): THREE.Object3D[] {
     const effects: THREE.Object3D[] = [];
@@ -1129,9 +1143,13 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       if (attackVisual.attack.intensity >= environment.popup.intensityThreshold) {
         const blinkFrequency = 100 + (10 - attackVisual.attack.intensity) * 50; // Higher intensity = faster blinking
         const blink = Math.sin(age / blinkFrequency) > 0;
-
+        const pulseSize = 1.0 + 0.2 * Math.sin(age / 200); // Effetto pulsante
+      
         (attackVisual.line.material as THREE.LineDashedMaterial).opacity = blink ? 0.9 : 0.4;
         (attackVisual.particles.material as THREE.PointsMaterial).opacity = blink ? 1 : 0.5;
+        // Aggiungi effetto pulsante alla dimensione delle particelle
+        (attackVisual.particles.material as THREE.PointsMaterial).size = 
+          (2.5 + (attackVisual.attack.intensity * 0.2)) * pulseSize;
       }
     });
 
