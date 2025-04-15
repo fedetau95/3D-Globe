@@ -91,7 +91,7 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
   private currentZoomItem: ZoomQueueItem | null = null;
   private initialCameraPosition = new THREE.Vector3();
   private initialCameraLookAt = new THREE.Vector3();
-  private defaultCameraPosition = new THREE.Vector3(-150, 150, 150);
+  private defaultCameraPosition = new THREE.Vector3(250, 250, 100);
   private defaultLookAt = new THREE.Vector3(0, 0, 0);
   private cameraIsResetting: boolean = false;
   private cameraResetStartTime: number = 0;
@@ -114,7 +114,13 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
   topAttackedCountries: Array<{ code: string, name: string, attacks: number }> = [];
   attackTypeStats: Array<{ type: string, count: number }> = [];
 
-  // Subscriptions
+  // Europe focus variables
+  isEuropeFocused: boolean = false;
+  originalRotationSpeed: number = 0;
+  europePosition = new THREE.Vector3(350, 350, -100);
+  europeLookAt = new THREE.Vector3(0, 0, 0);
+
+  //Subscriptions
   private subscriptions: Subscription[] = [];
 
   constructor(
@@ -224,9 +230,9 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     // Set initial camera position to see the upper hemisphere with Europe
     // Position the camera looking at Europe (roughly 45° north, 10° east)
     this.camera.position.set(
-      -150,  // X coordinate (negative to move camera left)
-      150,   // Y coordinate (positive to move camera up)
-      150    // Z coordinate (positive to move camera back)
+      250,  // X coordinate (negative to move camera left)
+      250,   // Y coordinate (positive to move camera up)
+      -100    // Z coordinate (positive to move camera back)
     );
 
     this.initialCameraPosition.copy(this.camera.position);
@@ -774,6 +780,11 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     const attackVisual = this.activeAttacks.get(attack.id);
     if (!attackVisual) return;
 
+    // If we're currently focusing on Europe, cancel that first
+    if (this.isEuropeFocused) {
+      this.endEuropeFocus();
+    }
+
     // Estrai i punti dalla curva dell'attacco
     const curve = attackVisual.curve;
     const startPoint = curve.getPoint(0);
@@ -970,8 +981,110 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     this.startCameraReset();
   }
 
-  // Avvia il reset della camera alla posizione di default
+  // Toggle Europe focus method
+  toggleEuropeFocus(): void {
+    if (this.isEuropeFocused) {
+      // Se già focalizzato, disattiva il focus e riprendi la rotazione
+      this.endEuropeFocus();
+    } else {
+      // Altrimenti, attiva il focus sull'Europa
+      this.focusOnEurope();
+    }
+  }
+
+  // Focus on Europe method
+  private focusOnEurope(): void {
+    if (this.isEuropeFocused) return;
+
+    this.ngZone.run(() => {
+      this.isEuropeFocused = true;
+
+      // Stop any ongoing zoom or camera reset
+      if (this.isZooming || this.cameraIsResetting) {
+        this.completeCurrentZoom();
+        this.cameraIsResetting = false;
+      }
+
+      // Store original rotation speed
+      this.originalRotationSpeed = this.rotationSpeed;
+
+      // Stop globe rotation
+      this.rotationSpeed = 0;
+
+      // Disable controls
+      this.controls.enabled = false;
+
+      // Position the camera looking at Europe
+      this.moveToEurope();
+    });
+  }
+
+  // End Europe focus and resume normal operation
+  private endEuropeFocus(): void {
+    if (!this.isEuropeFocused) return;
+
+    this.ngZone.run(() => {
+      // Reset focus state
+      this.isEuropeFocused = false;
+
+      // Restore original rotation speed
+      this.rotationSpeed = this.originalRotationSpeed;
+
+      // Start camera reset to default position
+      this.startCameraReset();
+    });
+  }
+
+  // Move camera to Europe
+  private moveToEurope(): void {
+    // Position for looking at Europe (roughly centered on Italy, as per the ENI request)
+    const targetPosition = this.europePosition.clone();
+    const targetLookAt = this.europeLookAt.clone();
+
+    // Store current position for smooth transition
+    const startPosition = this.camera.position.clone();
+    const startLookAt = this.controls.target.clone();
+
+    // Set up animation
+    const duration = 2.0;  // seconds
+    const startTime = Date.now();
+
+    // Animation function for smooth transition
+    const animateToEurope = () => {
+      const elapsed = (Date.now() - startTime) / 1000;  // seconds
+
+      if (elapsed < duration) {
+        // Calculate progress with easing
+        const t = this.easeInOutCubic(elapsed / duration);
+
+        // Update camera position
+        this.camera.position.lerpVectors(startPosition, targetPosition, t);
+
+        // Update target
+        this.controls.target.lerpVectors(startLookAt, targetLookAt, t);
+        this.controls.update();
+
+        // Continue animation
+        requestAnimationFrame(animateToEurope);
+      } else {
+        // Animation complete, ensure final position
+        this.camera.position.copy(targetPosition);
+        this.controls.target.copy(targetLookAt);
+        this.controls.update();
+      }
+    };
+
+    // Start animation
+    animateToEurope();
+  }
+
+  // Modifiche a startCameraReset per gestire il focus sull'Europa
   private startCameraReset(): void {
+    // If we're currently focusing on Europe, update the state
+    if (this.isEuropeFocused) {
+      this.isEuropeFocused = false;
+    }
+
     this.isZooming = false;
     this.cameraIsResetting = true;
     this.cameraResetStartTime = Date.now();
@@ -1264,12 +1377,12 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       // Se tutte le particelle sono arrivate e l'attacco non è ancora segnato come completato
       if (allParticlesArrived && !attackVisual.completed) {
         attackVisual.completed = true;
-      
+
         // Crea l'effetto di impatto al punto di destinazione
         const targetPos = curve.getPoint(1);
         const color = this.getColorForAttackType(attackVisual.attack.type);
         const impactEffects = this.createImpactEffect(targetPos, color, attackVisual.attack.intensity);
-      
+
         // Memorizza gli effetti di impatto
         attackVisual.impactEffects = impactEffects;
       }

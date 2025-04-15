@@ -1,5 +1,10 @@
 <canvas #globeCanvas></canvas>
 
+<button class="focus-europe-btn" (click)="toggleEuropeFocus()">
+  <span class="btn-icon">{{ isEuropeFocused ? '🔄' : '🔍' }}</span>
+  <span class="btn-text">{{ isEuropeFocused ? 'Resume Rotation' : 'Focus on Europe' }}</span>
+</button>
+
 <div class="controls">
   <!-- Nuovo pannello degli attacchi passati (lato sinistro) -->
   <div class="left-panel">
