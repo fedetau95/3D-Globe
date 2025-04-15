@@ -16,7 +16,9 @@ interface AttackVisual {
   attack: Attack;
   lifetime: number;
   completed: boolean;
-  curve: THREE.QuadraticBezierCurve3; // Aggiungi la curva direttamente qui per comodità
+  curve: THREE.QuadraticBezierCurve3;
+  currentLinePoint: number; // Nuovo campo per tracciare il punto attuale
+  linePoints: THREE.Vector3[]; // Array di punti per la linea
 }
 
 interface Pagination {
@@ -507,15 +509,16 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     // Create quadratic curve
     const curve = new THREE.QuadraticBezierCurve3(sourcePos, midPoint, targetPos);
 
-    // Create line geometry following the curve
-    const points = curve.getPoints(50);
-    const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
-
     // Get color based on attack type
     const color = this.getColorForAttackType(attack.type);
 
     // Create line material with gradient effect
     // Usiamo LineDashedMaterial per un effetto tratteggiato che aiuta a visualizzare la direzione
+    const initialPoint = [sourcePos.x, sourcePos.y, sourcePos.z];
+    const lineGeometry = new THREE.BufferGeometry();
+    lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(initialPoint, 3));
+
+    // Crea il materiale della linea come prima
     const lineMaterial = new THREE.LineDashedMaterial({
       color: color,
       dashSize: 3,
@@ -579,12 +582,14 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     this.activeAttacks.set(attack.id, {
       line,
       particles,
-      curve, // Salviamo la curva direttamente nell'oggetto AttackVisual
+      curve,
       impactEffects,
       startTime: Date.now(),
       attack,
       lifetime: 5000 + (attack.intensity * 300),
-      completed: false
+      completed: false,
+      currentLinePoint: 0, // Aggiungi questa proprietà per tenere traccia del punto attuale della linea
+      linePoints: [sourcePos.clone()] // Aggiungi un array per memorizzare i punti della linea
     });
   }
 
@@ -1195,17 +1200,23 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       const curve = attackVisual.curve;
       const particleData = attackVisual.particles.userData['particles'];
       let allParticlesArrived = true;
+      let furthestPoint = 0;
 
       // Aggiornare la posizione di ogni particella lungo la curva
       for (let i = 0; i < particleCount; i++) {
         const particle = particleData[i];
         particle.t += particle.speed;
 
+        // Tieni traccia del punto più avanzato lungo la curva
+        if (particle.t > furthestPoint) {
+          furthestPoint = particle.t;
+        }
+
         // Se la particella ha raggiunto la destinazione, tenerla lì
         if (particle.t >= 1) {
           particle.t = 1;
         } else {
-          // Se almeno una particella non è ancora arrivata, l'attacco non è completo
+          // Solo se almeno una particella non è ancora arrivata, l'attacco non è completo
           allParticlesArrived = false;
         }
 
@@ -1218,15 +1229,47 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
         positions[i * 3 + 2] = pos.z;
       }
 
+      if (!attackVisual.completed && furthestPoint > attackVisual.currentLinePoint) {
+        // Calcola quanti nuovi punti aggiungere alla linea
+        const numPoints = Math.ceil((furthestPoint - attackVisual.currentLinePoint) * 50); // Moltiplicatore per il numero di punti
+
+        if (numPoints > 0) {
+          for (let i = 1; i <= numPoints; i++) {
+            const t = attackVisual.currentLinePoint + (i * (furthestPoint - attackVisual.currentLinePoint) / numPoints);
+            if (t <= 1.0) {
+              const newPoint = curve.getPoint(Math.min(t, 1.0));
+              attackVisual.linePoints.push(newPoint);
+            }
+          }
+
+          // Aggiorna la geometria della linea con i nuovi punti
+          const positions = new Float32Array(attackVisual.linePoints.length * 3);
+          attackVisual.linePoints.forEach((point, i) => {
+            positions[i * 3] = point.x;
+            positions[i * 3 + 1] = point.y;
+            positions[i * 3 + 2] = point.z;
+          });
+
+          // Sostituisci la geometria esistente con la nuova
+          attackVisual.line.geometry.dispose();
+          attackVisual.line.geometry = new THREE.BufferGeometry();
+          attackVisual.line.geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+          attackVisual.line.computeLineDistances(); // Necessario per il materiale tratteggiato
+
+          // Aggiorna il punto corrente
+          attackVisual.currentLinePoint = furthestPoint;
+        }
+      }
+
       // Se tutte le particelle sono arrivate e l'attacco non è ancora segnato come completato
       if (allParticlesArrived && !attackVisual.completed) {
         attackVisual.completed = true;
-
+      
         // Crea l'effetto di impatto al punto di destinazione
         const targetPos = curve.getPoint(1);
         const color = this.getColorForAttackType(attackVisual.attack.type);
         const impactEffects = this.createImpactEffect(targetPos, color, attackVisual.attack.intensity);
-
+      
         // Memorizza gli effetti di impatto
         attackVisual.impactEffects = impactEffects;
       }
