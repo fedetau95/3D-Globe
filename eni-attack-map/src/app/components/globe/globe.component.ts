@@ -1048,23 +1048,105 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     this.attackTypeStats.sort((a, b) => b.count - a.count);
   }
 
+  // NUOVO METODO: riproduce un attacco passato quando viene cliccato nella lista
   showAttackDetails(attack: Attack): void {
-    // Mostra il popup con i dettagli dell'attacco
-    this.ngZone.run(() => {
-      this.popupData = {
-        show: true,
-        attack: attack,
-        position: null // La posizione verrà calcolata nel prossimo frame
-      };
+    // Interrompi qualsiasi zoom in corso
+    if (this.isZooming || this.cameraIsResetting) {
+      this.completeCurrentZoom();
+      this.cameraIsResetting = false;
+    }
 
-      // Nascondi il popup dopo un timeout
-      setTimeout(() => {
-        if (this.popupData.attack?.id === attack.id) {
-          this.popupData.show = false;
-        }
-      }, environment.popup.duration);
+    // Pulisci eventuali attacchi attivi esistenti per evitare sovrapposizioni
+    this.activeAttacks.forEach((attackVisual, id) => {
+      this.cleanupAttackVisual(attackVisual);
     });
+    this.activeAttacks.clear();
+
+    // Crea una copia dell'attacco con timestamp corrente
+    const replayAttack: Attack = {
+      ...attack,
+      id: `replay-${Date.now()}-${attack.id}`, // Crea un ID univoco
+      timestamp: new Date() // Aggiorna il timestamp all'ora corrente
+    };
+
+    // Crea la visualizzazione dell'attacco
+    this.createAttackVisualization(replayAttack);
+
+    // Aggiungi alla coda di zoom (indipendentemente dall'intensità)
+    const attackVisual = this.activeAttacks.get(replayAttack.id);
+    if (attackVisual) {
+      this.addToZoomQueue(replayAttack);
+      this.showPopup(replayAttack);
+    }
   }
+
+  // NUOVO METODO: pulisce le risorse di un attacco visuale
+  private cleanupAttackVisual(attackVisual: AttackVisual): void {
+    // Rimuovi la linea
+    if (attackVisual.line) {
+      this.globe.remove(attackVisual.line);
+      if (attackVisual.line.geometry) {
+        attackVisual.line.geometry.dispose();
+      }
+      if (attackVisual.line.material) {
+        if (Array.isArray(attackVisual.line.material)) {
+          attackVisual.line.material.forEach(m => m.dispose());
+        } else {
+          attackVisual.line.material.dispose();
+        }
+      }
+    }
+
+    // Rimuovi le particelle
+    if (attackVisual.particles) {
+      this.globe.remove(attackVisual.particles);
+      if (attackVisual.particles.geometry) {
+        attackVisual.particles.geometry.dispose();
+      }
+      if (attackVisual.particles.material) {
+        if (Array.isArray(attackVisual.particles.material)) {
+          attackVisual.particles.material.forEach(m => m.dispose());
+        } else {
+          attackVisual.particles.material.dispose();
+        }
+      }
+    }
+
+    // Rimuovi i marker direzionali
+    if (attackVisual.directionMarkers) {
+      this.globe.remove(attackVisual.directionMarkers);
+      if (attackVisual.directionMarkers.geometry) {
+        attackVisual.directionMarkers.geometry.dispose();
+      }
+      if (attackVisual.directionMarkers.material) {
+        if (Array.isArray(attackVisual.directionMarkers.material)) {
+          attackVisual.directionMarkers.material.forEach(m => m.dispose());
+        } else {
+          attackVisual.directionMarkers.material.dispose();
+        }
+      }
+    }
+
+    // Rimuovi gli effetti di impatto
+    if (attackVisual.impactEffects && attackVisual.impactEffects.length > 0) {
+      attackVisual.impactEffects.forEach(effect => {
+        this.globe.remove(effect);
+        if (effect instanceof THREE.Mesh || effect instanceof THREE.Points) {
+          if (effect.geometry) {
+            effect.geometry.dispose();
+          }
+          if (effect.material) {
+            if (Array.isArray(effect.material)) {
+              effect.material.forEach(m => m.dispose());
+            } else {
+              effect.material.dispose();
+            }
+          }
+        }
+      });
+    }
+  }
+
   private animate(): void {
     this.animationFrameId = requestAnimationFrame(() => this.animate());
 
@@ -1096,72 +1178,7 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // Remove expired attacks
       if (age > attackVisual.lifetime) {
-        // Rimuovi la linea
-        if (attackVisual.line) {
-          this.globe.remove(attackVisual.line);
-          if (attackVisual.line.geometry) {
-            attackVisual.line.geometry.dispose();
-          }
-          if (attackVisual.line.material) {
-            if (Array.isArray(attackVisual.line.material)) {
-              attackVisual.line.material.forEach(m => m.dispose());
-            } else {
-              attackVisual.line.material.dispose();
-            }
-          }
-        }
-
-        // Rimuovi le particelle
-        if (attackVisual.particles) {
-          this.globe.remove(attackVisual.particles);
-          if (attackVisual.particles.geometry) {
-            attackVisual.particles.geometry.dispose();
-          }
-          if (attackVisual.particles.material) {
-            if (Array.isArray(attackVisual.particles.material)) {
-              attackVisual.particles.material.forEach(m => m.dispose());
-            } else {
-              attackVisual.particles.material.dispose();
-            }
-          }
-        }
-
-        // Rimuovi i marker direzionali
-        if (attackVisual.directionMarkers) {
-          this.globe.remove(attackVisual.directionMarkers);
-          if (attackVisual.directionMarkers.geometry) {
-            attackVisual.directionMarkers.geometry.dispose();
-          }
-          if (attackVisual.directionMarkers.material) {
-            if (Array.isArray(attackVisual.directionMarkers.material)) {
-              attackVisual.directionMarkers.material.forEach(m => m.dispose());
-            } else {
-              attackVisual.directionMarkers.material.dispose();
-            }
-          }
-        }
-
-        // Rimuovi gli effetti di impatto
-        if (attackVisual.impactEffects && attackVisual.impactEffects.length > 0) {
-          attackVisual.impactEffects.forEach(effect => {
-            this.globe.remove(effect);
-            if (effect instanceof THREE.Mesh || effect instanceof THREE.Points) {
-              if (effect.geometry) {
-                effect.geometry.dispose();
-              }
-              if (effect.material) {
-                if (Array.isArray(effect.material)) {
-                  effect.material.forEach(m => m.dispose());
-                } else {
-                  effect.material.dispose();
-                }
-              }
-            }
-          });
-          // Svuota l'array degli effetti
-          attackVisual.impactEffects = [];
-        }
-
+        this.cleanupAttackVisual(attackVisual);
         this.activeAttacks.delete(id);
         return;
       }
