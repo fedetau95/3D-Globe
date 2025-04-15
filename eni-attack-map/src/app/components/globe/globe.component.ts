@@ -19,6 +19,13 @@ interface AttackVisual {
   curve: THREE.QuadraticBezierCurve3; // Aggiungi la curva direttamente qui per comodità
 }
 
+interface Pagination {
+  currentPage: number;
+  totalPages: number;
+  pageSize: number;
+  totalItems: number;
+}
+
 interface PopupData {
   show: boolean;
   attack: Attack | null;
@@ -94,7 +101,13 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     attack: null,
     position: null
   };
-
+  pastAttacks: Attack[] = [];
+  pastAttacksPagination: Pagination = {
+    currentPage: 1,
+    totalPages: 1,
+    pageSize: 10,
+    totalItems: 0
+  };
   // Statistics data
   topAttackedCountries: Array<{ code: string, name: string, attacks: number }> = [];
   attackTypeStats: Array<{ type: string, count: number }> = [];
@@ -110,6 +123,7 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnInit(): void {
     this.updateStats();
+    this.loadPastAttacks();
   }
 
   ngAfterViewInit(): void {
@@ -153,6 +167,43 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(window.innerWidth, window.innerHeight);
     }
+  }
+
+  loadPastAttacks(page: number = 1): void {
+    const { attacks, totalCount } = this.attackService.getPastAttacks(page, this.pastAttacksPagination.pageSize);
+    this.pastAttacks = attacks;
+
+    // Aggiorna la paginazione
+    this.pastAttacksPagination = {
+      currentPage: page,
+      pageSize: this.pastAttacksPagination.pageSize,
+      totalItems: totalCount,
+      totalPages: Math.ceil(totalCount / this.pastAttacksPagination.pageSize)
+    };
+  }
+
+  // Metodi per la navigazione tra le pagine
+  goToPage(page: number): void {
+    if (page >= 1 && page <= this.pastAttacksPagination.totalPages) {
+      this.loadPastAttacks(page);
+    }
+  }
+
+  nextPage(): void {
+    if (this.pastAttacksPagination.currentPage < this.pastAttacksPagination.totalPages) {
+      this.goToPage(this.pastAttacksPagination.currentPage + 1);
+    }
+  }
+
+  prevPage(): void {
+    if (this.pastAttacksPagination.currentPage > 1) {
+      this.goToPage(this.pastAttacksPagination.currentPage - 1);
+    }
+  }
+
+  // Metodo per ottenere la classe CSS in base al tipo di attacco
+  getAttackTypeClass(type: string): string {
+    return type.toLowerCase().replace(' ', '-');
   }
 
   private initScene(): void {
@@ -992,11 +1043,28 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     attackStats.forEach((count, type) => {
       this.attackTypeStats.push({ type, count });
     });
-
+    this.loadPastAttacks(this.pastAttacksPagination.currentPage);
     // Sort by count in descending order
     this.attackTypeStats.sort((a, b) => b.count - a.count);
   }
 
+  showAttackDetails(attack: Attack): void {
+    // Mostra il popup con i dettagli dell'attacco
+    this.ngZone.run(() => {
+      this.popupData = {
+        show: true,
+        attack: attack,
+        position: null // La posizione verrà calcolata nel prossimo frame
+      };
+
+      // Nascondi il popup dopo un timeout
+      setTimeout(() => {
+        if (this.popupData.attack?.id === attack.id) {
+          this.popupData.show = false;
+        }
+      }, environment.popup.duration);
+    });
+  }
   private animate(): void {
     this.animationFrameId = requestAnimationFrame(() => this.animate());
 

@@ -18,14 +18,20 @@ canvas {
 .controls {
   position: absolute;
   top: 20px;
-  right: 20px;
-  width: 300px;
+  width: 100%;
   color: #fff;
   font-family: 'Arial', sans-serif;
   z-index: 10;
   display: flex;
+  justify-content: space-between;
+  padding: 0 20px;
+}
+
+.right-panel, .left-panel {
+  display: flex;
   flex-direction: column;
   gap: 20px;
+  width: 300px;
 }
 
 .stats-panel {
@@ -71,24 +77,173 @@ canvas {
   font-weight: bold;
 }
 
+/* Nuovo pannello per gli attacchi passati */
+.past-attacks-panel {
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+}
+
+.attack-list {
+  overflow-y: auto;
+  flex-grow: 1;
+  margin-bottom: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 100, 255, 0.5) rgba(0, 0, 0, 0.3);
+}
+
+.attack-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.attack-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 3px;
+}
+
+.attack-list::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 100, 255, 0.5);
+  border-radius: 3px;
+}
+
+.attack-item {
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  border-radius: 5px;
+  background-color: rgba(30, 30, 30, 0.7);
+  cursor: pointer;
+  border-left: 4px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.attack-item:hover {
+  background-color: rgba(40, 40, 40, 0.9);
+  transform: translateX(2px);
+}
+
+.attack-item.dos {
+  border-left-color: #ff5555;
+}
+
+.attack-item.malware {
+  border-left-color: #ffaa44;
+}
+
+.attack-item.phishing {
+  border-left-color: #ffff44;
+}
+
+.attack-item.ransomware {
+  border-left-color: #ff44ff;
+}
+
+.attack-item.sql-injection {
+  border-left-color: #44ffff;
+}
+
+.attack-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.attack-type {
+  font-weight: bold;
+}
+
+.attack-time {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.attack-details {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+}
+
+.attack-countries {
+  display: flex;
+  align-items: center;
+}
+
+.country-code {
+  font-weight: bold;
+  color: #ddd;
+}
+
+.arrow {
+  margin: 0 5px;
+  color: #888;
+}
+
+.attack-intensity {
+  display: flex;
+  align-items: center;
+}
+
+.intensity-label {
+  margin-right: 4px;
+  color: #888;
+}
+
+.intensity-value {
+  font-weight: bold;
+}
+
+/* Stili per la paginazione */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.page-btn {
+  background-color: rgba(0, 100, 255, 0.2);
+  color: #fff;
+  border: 1px solid rgba(0, 100, 255, 0.4);
+  border-radius: 4px;
+  padding: 3px 8px;
+  margin: 0 5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.page-btn:hover:not([disabled]) {
+  background-color: rgba(0, 100, 255, 0.4);
+}
+
+.page-btn[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.page-info {
+  font-size: 0.9rem;
+  margin: 0 10px;
+}
+
 /* Colori per i vari tipi di attacco */
-.dos {
+.dos, .dos .attack-type {
   color: #ff5555;
 }
 
-.malware {
+.malware, .malware .attack-type {
   color: #ffaa44;
 }
 
-.phishing {
+.phishing, .phishing .attack-type {
   color: #ffff44;
 }
 
-.ransomware {
+.ransomware, .ransomware .attack-type {
   color: #ff44ff;
 }
 
-.sql {
+.sql-injection, .sql-injection .attack-type {
   color: #44ffff;
 }
 
@@ -212,7 +367,7 @@ canvas {
   box-shadow: inset 0 0 15px rgba(255, 0, 255, 0.5);
 }
 
-.attack-popup .header.sql {
+.attack-popup .header.sql-injection {
   background-color: rgba(0, 255, 255, 0.7);
   box-shadow: inset 0 0 15px rgba(0, 255, 255, 0.5);
 }
@@ -247,4 +402,24 @@ canvas {
 
 .attack-popup.high-intensity {
   animation: fadeIn 0.3s ease-out, pulse 1.5s infinite;
+}
+
+/* Media queries per la responsività */
+@media (max-width: 1200px) {
+  .controls {
+    flex-direction: column;
+    align-items: center;
+    top: 10px;
+    padding: 0 10px;
+    gap: 10px;
+  }
+  
+  .left-panel, .right-panel {
+    width: 90%;
+    max-width: 500px;
+  }
+  
+  .stats-panel, .legend {
+    margin-bottom: 10px;
+  }
 }

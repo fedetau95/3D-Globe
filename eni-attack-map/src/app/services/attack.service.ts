@@ -28,6 +28,7 @@ export interface Attack {
 export class AttackService {
   private attackSubject = new Subject<Attack>();
   private activeAttacks: Map<string, Attack> = new Map();
+  private pastAttacks: Attack[] = []; // Nuovo array per memorizzare gli attacchi passati
   private nextAttackId = 1;
   
   // Statistics on attacks by type
@@ -61,6 +62,9 @@ export class AttackService {
   constructor(private worldDataService: WorldDataService) {
     // Start periodic attack simulation
     this.startAttackSimulation();
+    
+    // Genera alcuni attacchi passati di esempio per avere dati iniziali
+    this.generateInitialPastAttacks();
   }
 
   // Get attack stream as Observable
@@ -71,6 +75,17 @@ export class AttackService {
   // Get active attacks
   getActiveAttacks(): Map<string, Attack> {
     return this.activeAttacks;
+  }
+  
+  // Get past attacks with pagination
+  getPastAttacks(page: number = 1, pageSize: number = 10): { attacks: Attack[], totalCount: number } {
+    const startIdx = (page - 1) * pageSize;
+    const endIdx = Math.min(startIdx + pageSize, this.pastAttacks.length);
+    
+    return {
+      attacks: this.pastAttacks.slice(startIdx, endIdx),
+      totalCount: this.pastAttacks.length
+    };
   }
   
   // Get attack statistics by type
@@ -139,6 +154,13 @@ export class AttackService {
     // Remove attack after a period
     setTimeout(() => {
       this.activeAttacks.delete(attack.id);
+      // Aggiungi l'attacco all'elenco degli attacchi passati
+      this.pastAttacks.unshift(attack); // Inserisci all'inizio per avere i più recenti in cima
+      
+      // Limita il numero massimo di attacchi passati memorizzati (per evitare consumo eccessivo di memoria)
+      if (this.pastAttacks.length > 1000) {
+        this.pastAttacks.pop(); // Rimuovi l'ultimo (più vecchio)
+      }
     }, environment.attacks.lifetime + Math.random() * 5000);
     
     // Emit attack event
@@ -179,5 +201,63 @@ export class AttackService {
     };
     
     return countryNames[code] || code;
+  }
+  
+  // Genera attacchi passati di esempio per avere dati da mostrare all'avvio
+  private generateInitialPastAttacks(): void {
+    const attackTypes = environment.attacks.types;
+    const countryCodes = Object.keys(this.countryCoordinates);
+    
+    // Crea 50 attacchi casuali nel passato
+    for (let i = 0; i < 50; i++) {
+      const sourceIdx = Math.floor(Math.random() * countryCodes.length);
+      let targetIdx = Math.floor(Math.random() * countryCodes.length);
+      
+      // Ensure target is different from source
+      while (targetIdx === sourceIdx) {
+        targetIdx = Math.floor(Math.random() * countryCodes.length);
+      }
+      
+      const sourceCountry = countryCodes[sourceIdx];
+      const targetCountry = countryCodes[targetIdx];
+      const sourceCoord = this.countryCoordinates[sourceCountry];
+      const targetCoord = this.countryCoordinates[targetCountry];
+      
+      // Select random attack type
+      const attackType = attackTypes[Math.floor(Math.random() * attackTypes.length)];
+      
+      // Generate random intensity (1-10)
+      const intensity = Math.floor(Math.random() * environment.attacks.maxIntensity) + 1;
+      
+      // Create timestamp in the past (up to 24 hours ago)
+      const pastTime = new Date();
+      pastTime.setMinutes(pastTime.getMinutes() - Math.floor(Math.random() * 1440)); // Fino a 24 ore nel passato
+      
+      // Create attack object
+      const attack: Attack = {
+        id: `past-attack-${i}`,
+        source: {
+          country: this.getCountryNameFromCode(sourceCountry),
+          countryCode: sourceCountry,
+          lat: sourceCoord.lat,
+          lng: sourceCoord.lng
+        },
+        target: {
+          country: this.getCountryNameFromCode(targetCountry),
+          countryCode: targetCountry,
+          lat: targetCoord.lat,
+          lng: targetCoord.lng
+        },
+        type: attackType,
+        intensity: intensity,
+        timestamp: pastTime
+      };
+      
+      // Aggiungi l'attacco all'elenco degli attacchi passati
+      this.pastAttacks.push(attack);
+    }
+    
+    // Ordina gli attacchi per timestamp (più recenti in cima)
+    this.pastAttacks.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
   }
 }

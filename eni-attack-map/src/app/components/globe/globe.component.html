@@ -1,35 +1,71 @@
 <canvas #globeCanvas></canvas>
 
 <div class="controls">
-  <div class="stats-panel">
-    <h2>Attack Statistics</h2>
-    <div class="top-countries">
-      <h3>Top 10 Most Attacked Countries</h3>
-      <ul>
-        <li *ngFor="let country of topAttackedCountries">
-          {{ country.name }} <span class="count">{{ country.attacks | number }}</span>
-        </li>
-      </ul>
-    </div>
-    <div class="attack-types">
-      <h3>Attack Types</h3>
-      <ul>
-        <li *ngFor="let stat of attackTypeStats" [ngClass]="stat.type.toLowerCase()">
-          {{ stat.type }} <span class="count">{{ stat.count | number }}</span>
-        </li>
-      </ul>
+  <!-- Nuovo pannello degli attacchi passati (lato sinistro) -->
+  <div class="left-panel">
+    <div class="stats-panel past-attacks-panel">
+      <h2>Past Attacks</h2>
+      <div class="attack-list">
+        <div *ngFor="let attack of pastAttacks" class="attack-item" [ngClass]="getAttackTypeClass(attack.type)" (click)="showAttackDetails(attack)">
+          <div class="attack-header">
+            <span class="attack-type">{{ attack.type }}</span>
+            <span class="attack-time">{{ attack.timestamp | date:'HH:mm:ss' }}</span>
+          </div>
+          <div class="attack-details">
+            <div class="attack-countries">
+              <span class="country-code">{{ attack.source.countryCode }}</span>
+              <span class="arrow">→</span>
+              <span class="country-code">{{ attack.target.countryCode }}</span>
+            </div>
+            <div class="attack-intensity">
+              <span class="intensity-label">Intensity:</span>
+              <span class="intensity-value">{{ attack.intensity }}/10</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Paginazione -->
+      <div class="pagination" *ngIf="pastAttacksPagination.totalPages > 1">
+        <button [disabled]="pastAttacksPagination.currentPage === 1" (click)="prevPage()" class="page-btn">←</button>
+        <span class="page-info">{{ pastAttacksPagination.currentPage }} / {{ pastAttacksPagination.totalPages }}</span>
+        <button [disabled]="pastAttacksPagination.currentPage === pastAttacksPagination.totalPages" (click)="nextPage()" class="page-btn">→</button>
+      </div>
     </div>
   </div>
 
-  <div class="legend">
-    <h3>Attack Types</h3>
-    <ul>
-      <li><span class="color-box dos"></span> DoS Attack</li>
-      <li><span class="color-box malware"></span> Malware</li>
-      <li><span class="color-box phishing"></span> Phishing</li>
-      <li><span class="color-box ransomware"></span> Ransomware</li>
-      <li><span class="color-box sql"></span> SQL Injection</li>
-    </ul>
+  <!-- Pannello statistiche esistente (ora a destra) -->
+  <div class="right-panel">
+    <div class="stats-panel">
+      <h2>Attack Statistics</h2>
+      <div class="top-countries">
+        <h3>Top 10 Most Attacked Countries</h3>
+        <ul>
+          <li *ngFor="let country of topAttackedCountries">
+            {{ country.name }} <span class="count">{{ country.attacks | number }}</span>
+          </li>
+        </ul>
+      </div>
+      <div class="attack-types">
+        <h3>Attack Types</h3>
+        <ul>
+          <li *ngFor="let stat of attackTypeStats" [ngClass]="stat.type.toLowerCase()">
+            {{ stat.type }} <span class="count">{{ stat.count | number }}</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="legend">
+      <h3>Attack Types</h3>
+      <ul>
+        <li><span class="color-box dos"></span> DoS Attack</li>
+        <li><span class="color-box malware"></span> Malware</li>
+        <li><span class="color-box phishing"></span> Phishing</li>
+        <li><span class="color-box ransomware"></span> Ransomware</li>
+        <li><span class="color-box sql"></span> SQL Injection</li>
+      </ul>
+    </div>
   </div>
 </div>
 
