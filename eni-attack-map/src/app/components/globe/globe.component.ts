@@ -258,28 +258,29 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private setupLights(): void {
-    // Aumentiamo l'intensità della luce ambientale per una maggiore uniformità
-    const ambientLight = new THREE.AmbientLight(0x404040, 3); // Aumento dell'intensità
+    // Increase ambient light intensity for more uniformity
+    const ambientLight = new THREE.AmbientLight(0x404040, 5);
     this.scene.add(ambientLight);
-
-    // Aggiungiamo più luci direzionali da diverse angolazioni
+  
+    // Add directional lights from various angles for more even illumination
     const createDirectionalLight = (x: number, y: number, z: number, intensity: number) => {
       const light = new THREE.DirectionalLight(0xffffff, intensity);
       light.position.set(x, y, z).normalize();
       this.scene.add(light);
       return light;
     };
-
-    // Luci da varie direzioni per un'illuminazione più uniforme
-    createDirectionalLight(1, 1, 1, 4); // Increased intensity
-    createDirectionalLight(-1, 1, 1, 4); // Increased intensity
-    createDirectionalLight(1, -1, 1, 4); // Increased intensity
-    createDirectionalLight(-1, -1, 1, 4); // Increased intensity
-
-    // Luce posteriore più debole
-    createDirectionalLight(-1, 0, -1, 2); // Increased intensity
-    createDirectionalLight(1, 0, -1, 2); // Increased intensity
+  
+    // Lights from various directions with adjusted intensity
+    createDirectionalLight(1, 1, 1, 2);
+    createDirectionalLight(-1, 1, 1, 2);
+    createDirectionalLight(1, -1, 1, 2);
+    createDirectionalLight(-1, -1, 1, 2);
+  
+    // Weaker back lights
+    createDirectionalLight(-1, 0, -1, 3);
+    createDirectionalLight(1, 0, -1, 3);
   }
+  
 
 
   private createStarField(): void {
@@ -377,51 +378,7 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     this.globe = new THREE.Mesh(geometry, material);
     this.scene.add(this.globe);
 
-    // Add atmospheric and glow effects
-    //this.addGlowEffect();
   }
-
-
-  private addGlowEffect(): void {
-    // Create glow effect using shader material
-    const glowGeometry = new THREE.SphereGeometry(this.radius + 2, this.segments, this.segments);
-    const glowMaterial = new THREE.ShaderMaterial({
-      uniforms: {
-        'c': { value: 0.3 }, // Increased intensity
-        'p': { value: 1.2 }, // Reduced falloff
-        glowColor: { value: new THREE.Color(0xadd8e6) }, // Lighter blue
-        viewVector: { value: new THREE.Vector3() }
-      },
-      vertexShader: `
-        uniform vec3 viewVector;
-        uniform float c;
-        uniform float p;
-        varying float intensity;
-        void main() {
-          vec3 vNormal = normalize(normal);
-          vec3 vNormel = normalize(viewVector);
-          intensity = pow(c - dot(vNormal, vNormel), p);
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        uniform vec3 glowColor;
-        varying float intensity;
-        void main() {
-          vec3 glow = glowColor * intensity;
-          gl_FragColor = vec4(glow, 1.0);
-        }
-      `,
-      side: THREE.BackSide,
-      blending: THREE.AdditiveBlending,
-      transparent: true
-    });
-  
-    const glowSphere = new THREE.Mesh(glowGeometry, glowMaterial);
-    this.scene.add(glowSphere);
-  }
-  
-  
 
   private setupControls(): void {
     // Create orbit controls for camera movement
