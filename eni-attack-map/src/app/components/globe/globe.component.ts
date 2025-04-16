@@ -984,9 +984,8 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Move camera to Europe
   private moveToEurope(): void {
-    // Position for looking at Europe (roughly centered on Italy, as per the ENI request)
-    const targetPosition = this.europePosition.clone();
-    const targetLookAt = this.europeLookAt.clone();
+    const initialEuropePosition = this.latLongToVector3(43, 12, this.radius * 2);
+    const initialEuropeLookAt = this.latLongToVector3(43, 12, this.radius);
 
     // Store current position for smooth transition
     const startPosition = this.camera.position.clone();
@@ -995,35 +994,33 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     // Set up animation
     const duration = 2.0;  // seconds
     const startTime = Date.now();
-
-    // Animation function for smooth transition
+  
     const animateToEurope = () => {
-      const elapsed = (Date.now() - startTime) / 1000;  // seconds
-
+      const elapsed = (Date.now() - startTime) / 1000;
+  
       if (elapsed < duration) {
-        // Calculate progress with easing
         const t = this.easeInOutCubic(elapsed / duration);
-
-        // Update camera position
+  
+        // Calculate target position and look-at with continuous rotation adjustment
+        const currentGlobeRotationMatrix = new THREE.Matrix4().makeRotationY(this.globe.rotation.y);
+        const inverseRotationMatrix = new THREE.Matrix4().copy(currentGlobeRotationMatrix).invert();
+  
+        const targetPosition = initialEuropePosition.clone().applyMatrix4(inverseRotationMatrix);
+        const targetLookAt = initialEuropeLookAt.clone().applyMatrix4(inverseRotationMatrix);
+  
         this.camera.position.lerpVectors(startPosition, targetPosition, t);
-
-        // Update target
         this.controls.target.lerpVectors(startLookAt, targetLookAt, t);
         this.controls.update();
-
-        // Continue animation
+  
         requestAnimationFrame(animateToEurope);
       } else {
-        // Animation complete, ensure final position
-        this.camera.position.copy(targetPosition);
-        this.controls.target.copy(targetLookAt);
-        this.controls.update();
+        // Ensure final position and maintain focus
+        this.maintainEuropeFocus();
       }
     };
-
-    // Start animation
     animateToEurope();
   }
+
 
   // Modifiche a startCameraReset per gestire il focus sull'Europa
   private startCameraReset(): void {
