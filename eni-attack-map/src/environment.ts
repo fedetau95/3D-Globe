@@ -16,7 +16,7 @@ export const environment = {
     rotationSpeed: 0.0005,
   },
   attacks: {
-    simulationInterval: 1000, // ms
+    simulationInterval: 200, // ms
     attackProbability: 0.9,   // 50% chance per interval
     maxIntensity: 10,
     lifetime: 5000,           // ms - ridotto da 10000 a 5000

@@ -271,10 +271,10 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     };
 
     // Luci da varie direzioni per un'illuminazione più uniforme
-    createDirectionalLight(1, 1, 1, 2.9); // Increased intensity
-    createDirectionalLight(-1, 1, 1, 2.9); // Increased intensity
-    createDirectionalLight(1, -1, 1, 2.9); // Increased intensity
-    createDirectionalLight(-1, -1, 1, 2.9); // Increased intensity
+    createDirectionalLight(1, 1, 1, 4); // Increased intensity
+    createDirectionalLight(-1, 1, 1, 4); // Increased intensity
+    createDirectionalLight(1, -1, 1, 4); // Increased intensity
+    createDirectionalLight(-1, -1, 1, 4); // Increased intensity
 
     // Luce posteriore più debole
     createDirectionalLight(-1, 0, -1, 2); // Increased intensity
@@ -379,7 +379,6 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Add atmospheric and glow effects
     //this.addGlowEffect();
-    //this.addAtmosphere();
   }
 
 
@@ -422,20 +421,6 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     this.scene.add(glowSphere);
   }
   
-
-  private addAtmosphere(): void {
-    // Add thin blue atmosphere layer
-    const atmosphereGeometry = new THREE.SphereGeometry(this.radius + 3, this.segments, this.segments); // Increased radius
-    const atmosphereMaterial = new THREE.MeshBasicMaterial({
-      color: 0x0077ff,
-      transparent: true,
-      opacity: 0, 
-      side: THREE.FrontSide
-    });
-  
-    const atmosphere = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
-    this.scene.add(atmosphere);
-  }
   
 
   private setupControls(): void {
