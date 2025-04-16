@@ -266,21 +266,21 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Add directional lights from various angles for more even illumination
     const createDirectionalLight = (x: number, y: number, z: number, intensity: number) => {
-      const light = new THREE.DirectionalLight(0xffffff, intensity);
+      const light = new THREE.DirectionalLight(0xFFAE00, intensity);
       light.position.set(x, y, z).normalize();
       this.scene.add(light);
       return light;
     };
 
     // Lights from various directions with adjusted intensity
-    createDirectionalLight(1, 1, 1, 2);
-    createDirectionalLight(-1, 1, 1, 2);
-    createDirectionalLight(1, -1, 1, 2);
-    createDirectionalLight(-1, -1, 1, 2);
+    createDirectionalLight(1, 1, 1, 4);
+    createDirectionalLight(-1, 1, 1, 4);
+    createDirectionalLight(1, -1, 1, 4);
+    createDirectionalLight(-1, -1, 1, 4);
 
     // Weaker back lights
-    createDirectionalLight(-1, 0, -1, 3);
-    createDirectionalLight(1, 0, -1, 3);
+    createDirectionalLight(-1, 0, -1, 6);
+    createDirectionalLight(1, 0, -1, 6);
   }
 
 
