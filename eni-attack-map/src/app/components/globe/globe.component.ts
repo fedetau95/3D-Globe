@@ -75,11 +75,11 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
   // Visual effects
   private activeAttacks: Map<string, AttackVisual> = new Map();
   private attackColors: Record<string, THREE.Color> = {
-    'DoS': new THREE.Color(0xff0000),        // Red
-    'Malware': new THREE.Color(0xff8800),    // Orange
-    'Phishing': new THREE.Color(0xffff00),   // Yellow
-    'Ransomware': new THREE.Color(0xff00ff), // Magenta
-    'SQL Injection': new THREE.Color(0x00ffff) // Cyan
+    'DoS': new THREE.Color(0xff3333),        // Bright Red
+    'Malware': new THREE.Color(0xffaa22),    // Vibrant Orange
+    'Phishing': new THREE.Color(0xffff44),   // Bright Yellow
+    'Ransomware': new THREE.Color(0xff66ff), // Vibrant Magenta
+    'SQL Injection': new THREE.Color(0x44ffff) // Bright Cyan
   };
 
   // Animation and rendering
