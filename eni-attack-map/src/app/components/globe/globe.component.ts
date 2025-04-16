@@ -985,50 +985,55 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private moveToEurope(): void {
-    const initialEuropePosition = this.latLongToVector3(43, 12, this.radius * 2);
-    const initialEuropeLookAt = this.latLongToVector3(43, 12, this.radius);
+    // Coordinate geografiche dell'Europa
+    const europeLatLong = { lat: 45, lng: 10 }; // Centro approssimativo dell'Europa
 
-    // Store current position for smooth transition
+    // Converti in coordinate 3D (senza applicare la rotazione del globo)
+    const europePos = this.latLongToVector3(europeLatLong.lat, europeLatLong.lng, this.radius);
+
+    // Salva questi vettori di riferimento non ruotati per l'aggiornamento continuo
+    this.europeFocusTarget = europePos.clone();
+
+    // Calcola la posizione ideale della telecamera (offset dall'Europa)
+    this.europeFocusCamera = europePos.clone().normalize().multiplyScalar(this.radius * 2.5);
+
+    // Animazione iniziale verso l'Europa
     const startPosition = this.camera.position.clone();
     const startLookAt = this.controls.target.clone();
 
-    // Set up animation
-    const duration = 2.0; // seconds
+    const duration = 2.0;
     const startTime = Date.now();
 
     const animateToEurope = () => {
+      if (!this.isEuropeFocused) return; // Interrompi se l'utente ha annullato il focus
+
       const elapsed = (Date.now() - startTime) / 1000;
 
       if (elapsed < duration) {
+        // Animazione ancora in corso
         const t = this.easeInOutCubic(elapsed / duration);
 
-        // Calculate target position and look-at with continuous rotation adjustment
-        const currentGlobeRotationMatrix = new THREE.Matrix4().makeRotationY(this.globe.rotation.y);
-        const inverseRotationMatrix = new THREE.Matrix4().copy(currentGlobeRotationMatrix).invert();
+        // Calcola la posizione corretta tenendo conto della rotazione attuale del globo
+        const rotationMatrix = new THREE.Matrix4().makeRotationY(this.globe.rotation.y);
 
-        const targetPosition = initialEuropePosition.clone().applyMatrix4(inverseRotationMatrix);
-        const targetLookAt = initialEuropeLookAt.clone().applyMatrix4(inverseRotationMatrix);
+        // Applica la rotazione ai vettori di riferimento
+        const targetPosition = this.europeFocusCamera.clone().applyMatrix4(rotationMatrix);
+        const targetLookAt = this.europeFocusTarget.clone().applyMatrix4(rotationMatrix);
 
-        // Use lerpVectors for smooth transition
+        // Interpola la posizione della telecamera
         this.camera.position.lerpVectors(startPosition, targetPosition, t);
         this.controls.target.lerpVectors(startLookAt, targetLookAt, t);
         this.controls.update();
 
         requestAnimationFrame(animateToEurope);
       } else {
-        // Ensure final position and maintain focus
-        const currentGlobeRotationMatrix = new THREE.Matrix4().makeRotationY(this.globe.rotation.y);
-        const inverseRotationMatrix = new THREE.Matrix4().copy(currentGlobeRotationMatrix).invert();
-
-        this.camera.position.copy(initialEuropePosition.clone().applyMatrix4(inverseRotationMatrix));
-        this.controls.target.copy(initialEuropeLookAt.clone().applyMatrix4(inverseRotationMatrix));
-        this.controls.update();
+        // L'animazione è completata, inizia il tracciamento continuo
+        this.europeFocusAnimationComplete = true;
       }
     };
 
     animateToEurope();
   }
-
 
   // Modifiche a startCameraReset per gestire il focus sull'Europa
   private startCameraReset(): void {
