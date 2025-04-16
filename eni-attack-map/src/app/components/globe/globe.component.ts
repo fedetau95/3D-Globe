@@ -941,28 +941,30 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  // Focus on Europe method
   private focusOnEurope(): void {
     if (this.isEuropeFocused) return;
-
+  
     this.ngZone.run(() => {
       this.isEuropeFocused = true;
-
+      
+      // Reset animation completion flag
+      this.europeFocusAnimationComplete = false;
+  
       // Stop any ongoing zoom or camera reset
       if (this.isZooming || this.cameraIsResetting) {
         this.completeCurrentZoom();
         this.cameraIsResetting = false;
       }
-
+  
       // Store original rotation speed
       this.originalRotationSpeed = this.rotationSpeed;
-
+  
       // Stop globe rotation
       this.rotationSpeed = 0;
-
+  
       // Disable controls
       this.controls.enabled = false;
-
+  
       // Position the camera looking at Europe
       this.moveToEurope();
     });
@@ -971,14 +973,17 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
   // End Europe focus and resume normal operation
   private endEuropeFocus(): void {
     if (!this.isEuropeFocused) return;
-
+  
     this.ngZone.run(() => {
       // Reset focus state
       this.isEuropeFocused = false;
-
+      
+      // Reset animation completion flag
+      this.europeFocusAnimationComplete = false;
+  
       // Restore original rotation speed
       this.rotationSpeed = this.originalRotationSpeed;
-
+  
       // Start camera reset to default position
       this.startCameraReset();
     });
