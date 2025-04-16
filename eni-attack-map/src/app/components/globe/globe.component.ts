@@ -599,7 +599,8 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       color: color,
       transparent: true,
       opacity: 0.7,
-      blending: THREE.AdditiveBlending
+      blending: THREE.AdditiveBlending,
+      depthTest: true
     });
 
     const glowSphere = new THREE.Mesh(glowGeometry, glowMaterial);
@@ -691,7 +692,7 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
         }
       `,
       blending: THREE.AdditiveBlending,
-      depthTest: false,
+      depthTest: true,
       transparent: true
     });
 
