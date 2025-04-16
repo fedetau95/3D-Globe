@@ -65,7 +65,7 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
   private clock = new THREE.Clock();
   private starField!: THREE.Points;
   private stars: THREE.Points[] = [];
-  private starCount = 40000; // Numero di stelle nello sfondo
+  private starCount = 120000; // Numero di stelle nello sfondo
 
   // Globe parameters
   private radius = environment.globe.radius;
@@ -96,7 +96,7 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
   private cameraIsResetting: boolean = false;
   private cameraResetStartTime: number = 0;
   private cameraResetDuration: number = 2.0; // secondi
-
+  private cameraResetMidPoint: THREE.Vector3 = new THREE.Vector3(250, 250, 100);
   // Popup for attack information
   popupData: PopupData = {
     show: false,
@@ -284,77 +284,6 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
 
-
-  private createStarField(): void {
-    // Creiamo tre layer di stelle con diverse velocità di rotazione
-    this.createStarLayer(this.starCount * 0.6, 300, 0.8); // Layer esterno, più lento
-    this.createStarLayer(this.starCount * 0.3, 500, 0.9); // Layer medio
-    this.createStarLayer(this.starCount * 0.1, 700, 1.0); // Layer interno, più veloce
-  }
-
-  private createStarLayer(count: number, radius: number, speedFactor: number): void {
-    // Geometria per le stelle
-    const starsGeometry = new THREE.BufferGeometry();
-    const starPositions = new Float32Array(count * 3);
-    const starColors = new Float32Array(count * 3);
-    const starSizes = new Float32Array(count);
-
-    // Generazione casuale di posizioni delle stelle
-    for (let i = 0; i < count; i++) {
-      const i3 = i * 3;
-
-      // Posizione sferica casuale
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-
-      starPositions[i3] = radius * Math.sin(phi) * Math.cos(theta);
-      starPositions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
-      starPositions[i3 + 2] = radius * Math.cos(phi);
-
-      // Colori variabili per le stelle (bianco, azzurro, giallastro)
-      const colorChoice = Math.random();
-      if (colorChoice < 0.6) {
-        // Stelle bianche (60%)
-        starColors[i3] = 1.0;
-        starColors[i3 + 1] = 1.0;
-        starColors[i3 + 2] = 1.0;
-      } else if (colorChoice < 0.8) {
-        // Stelle azzurre (20%)
-        starColors[i3] = 0.8;
-        starColors[i3 + 1] = 0.9;
-        starColors[i3 + 2] = 1.0;
-      } else {
-        // Stelle giallastre (20%)
-        starColors[i3] = 1.0;
-        starColors[i3 + 1] = 0.9;
-        starColors[i3 + 2] = 0.7;
-      }
-
-      // Dimensioni variabili casuali
-      starSizes[i] = Math.random() * 2 + 0.5;
-    }
-
-    starsGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-    starsGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
-    starsGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
-
-    // Materiale per le stelle
-    const starsMaterial = new THREE.PointsMaterial({
-      size: 1,
-      transparent: true,
-      opacity: 0.8,
-      vertexColors: true,
-      blending: THREE.AdditiveBlending,
-      sizeAttenuation: true
-    });
-
-    // Creiamo il sistema di stelle
-    const starPoints = new THREE.Points(starsGeometry, starsMaterial);
-    starPoints.userData = { speedFactor }; // Memorizziamo il fattore di velocità
-    this.scene.add(starPoints);
-    this.stars.push(starPoints);
-  }
-
   private createGlobe(): void {
     // Create sphere geometry for Earth
     const geometry = new THREE.SphereGeometry(this.radius, this.segments, this.segments);
@@ -380,6 +309,82 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     this.globe = new THREE.Mesh(geometry, material);
     this.scene.add(this.globe);
 
+  }
+
+  // Sostituzione del metodo createStarField esistente
+  private createStarField(): void {
+    // Crea tre layer di stelle a distanze differenti per un effetto di profondità migliore
+    this.createStarLayer(this.starCount * 0.9, 500, 0.9);
+    this.createStarLayer(this.starCount * 0.6, 700, 0.8); // Layer esterno più distante e lento
+    this.createStarLayer(this.starCount * 0.3, 900, 0.5); // Layer medio ancora più distante
+    this.createStarLayer(this.starCount * 0.1, 1100, 0.3); // Layer interno molto distante e quasi fermo
+  }
+
+  private createStarLayer(count: number, radius: number, speedFactor: number): void {
+    // Geometria per le stelle
+    const starsGeometry = new THREE.BufferGeometry();
+    const starPositions = new Float32Array(count * 3);
+    const starColors = new Float32Array(count * 3);
+    const starSizes = new Float32Array(count);
+
+    // Generazione casuale di posizioni delle stelle (distribuzione migliorata)
+    for (let i = 0; i < count; i++) {
+      const i3 = i * 3;
+
+      // Posizione sferica casuale con distribuzione più uniforme
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+
+      // Aggiungi un po' di varianza al raggio per evitare che tutte le stelle 
+      // siano esattamente alla stessa distanza
+      const radiusVariance = radius * (0.95 + Math.random() * 0.1);
+
+      starPositions[i3] = radiusVariance * Math.sin(phi) * Math.cos(theta);
+      starPositions[i3 + 1] = radiusVariance * Math.sin(phi) * Math.sin(theta);
+      starPositions[i3 + 2] = radiusVariance * Math.cos(phi);
+
+      // Colori variabili per le stelle (bianco, azzurro, giallastro)
+      const colorChoice = Math.random();
+      if (colorChoice < 0.6) {
+        // Stelle bianche (60%)
+        starColors[i3] = 0.9 + Math.random() * 0.1;       // Varia leggermente
+        starColors[i3 + 1] = 0.9 + Math.random() * 0.1;
+        starColors[i3 + 2] = 0.9 + Math.random() * 0.1;
+      } else if (colorChoice < 0.8) {
+        // Stelle azzurre (20%)
+        starColors[i3] = 0.7 + Math.random() * 0.1;
+        starColors[i3 + 1] = 0.8 + Math.random() * 0.1;
+        starColors[i3 + 2] = 0.9 + Math.random() * 0.1;
+      } else {
+        // Stelle giallastre (20%)
+        starColors[i3] = 0.9 + Math.random() * 0.1;
+        starColors[i3 + 1] = 0.8 + Math.random() * 0.1;
+        starColors[i3 + 2] = 0.6 + Math.random() * 0.1;
+      }
+
+      // Dimensioni inversamente proporzionali alla distanza per dare l'impressione di profondità
+      starSizes[i] = Math.random() * 1.5 + 0.5;
+    }
+
+    starsGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+    starsGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+    starsGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
+
+    // Materiale per le stelle con opacità ridotta per un look più naturale
+    const starsMaterial = new THREE.PointsMaterial({
+      size: 0.8,
+      transparent: true,
+      opacity: 0.7,
+      vertexColors: true,
+      blending: THREE.AdditiveBlending,
+      sizeAttenuation: true
+    });
+
+    // Creiamo il sistema di stelle
+    const starPoints = new THREE.Points(starsGeometry, starsMaterial);
+    starPoints.userData = { speedFactor }; // Memorizziamo il fattore di velocità
+    this.scene.add(starPoints);
+    this.stars.push(starPoints);
   }
 
   private setupControls(): void {
@@ -770,12 +775,11 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     this.controls.enabled = false;
   }
 
-  // Nuovo metodo per gestire la transizione iniziale
   private updateInitialTransition(item: ZoomQueueItem, now: number): boolean {
     if (item.state !== 'pending') return false;
 
-    // Calcola il tempo trascorso per la transizione iniziale (più breve, 0.7 secondi)
-    const initialTransitionDuration = 500; // 2000ms per la transizione iniziale
+    // Calcola il tempo trascorso per la transizione iniziale (aumentato a 700ms per maggiore fluidità)
+    const initialTransitionDuration = 700; // 700ms per la transizione iniziale
     const elapsed = now - (item.startTime || now);
     const progress = Math.min(elapsed / initialTransitionDuration, 1.0);
 
@@ -785,34 +789,72 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       return false;
     }
 
-    // Calcola la posizione della camera con easing
-    const smoothT = this.easeInOutCubic(progress);
+    // Calcola la posizione della camera con easing più fluido
+    const smoothT = this.easeOutQuint(progress);
 
-    // Interpola dalla posizione iniziale alla posizione di partenza dell'attacco
-    this.camera.position.lerpVectors(
-      this.initialCameraPosition,
-      item.startPosition,
-      smoothT
-    );
-
-    // Ottieni un punto intermedio tra la posizione attuale del target e quella dell'attacco
+    // Calcola un punto intermedio per evitare transizioni brusche
     const attackVisual = this.activeAttacks.get(item.attack.id);
-    if (attackVisual) {
-      const curve = attackVisual.curve;
-      const startPoint = curve.getPoint(0);
+    if (!attackVisual) return false;
 
-      // Applica la rotazione del globo
-      const rotatedStartPoint = startPoint.clone();
-      const globeRotationMatrix = new THREE.Matrix4().makeRotationY(this.globe.rotation.y);
-      rotatedStartPoint.applyMatrix4(globeRotationMatrix);
+    // Calcola un percorso arcuato invece di una linea retta
+    // Ottieni la direzione normalizzata dalla posizione corrente al target
+    const dirToTarget = new THREE.Vector3().subVectors(item.startPosition, this.initialCameraPosition).normalize();
 
-      // Interpola verso il punto iniziale dell'attacco
-      this.controls.target.lerpVectors(
-        this.initialCameraLookAt,
-        rotatedStartPoint,
-        smoothT
+    // Calcola un punto alto intermedio
+    const midDistance = this.initialCameraPosition.distanceTo(item.startPosition) * 0.5;
+    const upVector = new THREE.Vector3(0, 1, 0); // Vettore "up" generico
+
+    // Crea un offset perpendicolare alla direzione di movimento
+    const perpOffset = new THREE.Vector3().crossVectors(dirToTarget, upVector).normalize();
+    perpOffset.multiplyScalar(midDistance * 0.2); // 20% di offset laterale
+
+    // Punto alto intermedio (più alto del percorso diretto)
+    const elevationOffset = new THREE.Vector3(0, midDistance * 0.4, 0); // 40% più alto
+
+    // Calcola il punto intermedio effettivo
+    const midPoint = new THREE.Vector3().addVectors(
+      this.initialCameraPosition.clone().lerp(item.startPosition, 0.5),
+      elevationOffset
+    ).add(perpOffset);
+
+    // Usa interpolazione quadratica per seguire un percorso arcuato
+    let currentPos;
+    if (progress < 0.5) {
+      // Prima metà: dalla posizione iniziale al punto intermedio
+      const tHalf = progress * 2; // Riscala da 0-0.5 a 0-1
+      currentPos = new THREE.Vector3().lerpVectors(
+        this.initialCameraPosition,
+        midPoint,
+        this.easeOutQuint(tHalf)
+      );
+    } else {
+      // Seconda metà: dal punto intermedio alla posizione finale
+      const tHalf = (progress - 0.5) * 2; // Riscala da 0.5-1 a 0-1
+      currentPos = new THREE.Vector3().lerpVectors(
+        midPoint,
+        item.startPosition,
+        this.easeInOutCubic(tHalf)
       );
     }
+
+    // Applica la posizione calcolata
+    this.camera.position.copy(currentPos);
+
+    // Interpola anche il punto di mira
+    const curve = attackVisual.curve;
+    const startPoint = curve.getPoint(0);
+
+    // Applica la rotazione del globo
+    const rotatedStartPoint = startPoint.clone();
+    const globeRotationMatrix = new THREE.Matrix4().makeRotationY(this.globe.rotation.y);
+    rotatedStartPoint.applyMatrix4(globeRotationMatrix);
+
+    // Interpola verso il punto iniziale dell'attacco
+    this.controls.target.lerpVectors(
+      this.initialCameraLookAt,
+      rotatedStartPoint,
+      smoothT
+    );
 
     this.controls.update();
     return true;
@@ -943,28 +985,28 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private focusOnEurope(): void {
     if (this.isEuropeFocused) return;
-  
+
     this.ngZone.run(() => {
       this.isEuropeFocused = true;
-      
+
       // Reset animation completion flag
       this.europeFocusAnimationComplete = false;
-  
+
       // Stop any ongoing zoom or camera reset
       if (this.isZooming || this.cameraIsResetting) {
         this.completeCurrentZoom();
         this.cameraIsResetting = false;
       }
-  
+
       // Store original rotation speed
       this.originalRotationSpeed = this.rotationSpeed;
-  
+
       // Stop globe rotation
       this.rotationSpeed = 0;
-  
+
       // Disable controls
       this.controls.enabled = false;
-  
+
       // Position the camera looking at Europe
       this.moveToEurope();
     });
@@ -973,17 +1015,17 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
   // End Europe focus and resume normal operation
   private endEuropeFocus(): void {
     if (!this.isEuropeFocused) return;
-  
+
     this.ngZone.run(() => {
       // Reset focus state
       this.isEuropeFocused = false;
-      
+
       // Reset animation completion flag
       this.europeFocusAnimationComplete = false;
-  
+
       // Restore original rotation speed
       this.rotationSpeed = this.originalRotationSpeed;
-  
+
       // Start camera reset to default position
       this.startCameraReset();
     });
@@ -1040,7 +1082,6 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     animateToEurope();
   }
 
-  // Modifiche a startCameraReset per gestire il focus sull'Europa
   private startCameraReset(): void {
     // If we're currently focusing on Europe, update the state
     if (this.isEuropeFocused) {
@@ -1054,9 +1095,25 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     // Salva la posizione attuale della camera per l'interpolazione
     this.initialCameraPosition.copy(this.camera.position);
     this.initialCameraLookAt.copy(this.controls.target);
+
+    // Calcola un punto intermedio sicuro per evitare di passare troppo vicino alle stelle
+    // Usa una sfera immaginaria che contiene sia la posizione iniziale che quella finale
+    const distToDefault = this.initialCameraPosition.distanceTo(this.defaultCameraPosition);
+    const midRadius = Math.max(
+      this.initialCameraPosition.length(),
+      this.defaultCameraPosition.length()
+    ) * 1.2; // 20% più grande per sicurezza
+
+    // Calcola un punto intermedio sulla sfera immaginaria
+    const midDirection = new THREE.Vector3()
+      .addVectors(this.initialCameraPosition.clone().normalize(), this.defaultCameraPosition.clone().normalize())
+      .normalize();
+
+    // Memorizza il punto intermedio come proprietà
+    this.cameraResetMidPoint = midDirection.clone().multiplyScalar(midRadius);
   }
 
-  // Aggiorna l'animazione di reset della camera
+  // Metodo updateCameraReset completamente rivisto 
   private updateCameraReset(): void {
     if (!this.cameraIsResetting) return;
 
@@ -1072,18 +1129,31 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
 
-    // Interpola tra la posizione corrente e quella di default
+    // Calcola la percentuale di completamento con easing
     const t = elapsed / this.cameraResetDuration;
     const smoothT = this.easeInOutCubic(t);
 
-    // Aggiorna la posizione della camera
-    this.camera.position.lerpVectors(
-      this.initialCameraPosition,
-      this.defaultCameraPosition,
-      smoothT
-    );
+    // Usa un percorso curvilineo invece di un'interpolazione lineare
+    // Divide il movimento in due fasi
+    if (t < 0.5) {
+      // Prima metà: dalla posizione iniziale al punto intermedio
+      const t1 = smoothT * 2; // Normalizza da 0-0.5 a 0-1
+      this.camera.position.lerpVectors(
+        this.initialCameraPosition,
+        this.cameraResetMidPoint,
+        this.easeOutQuint(t1)
+      );
+    } else {
+      // Seconda metà: dal punto intermedio alla posizione finale
+      const t2 = (smoothT - 0.5) * 2; // Normalizza da 0.5-1 a 0-1
+      this.camera.position.lerpVectors(
+        this.cameraResetMidPoint,
+        this.defaultCameraPosition,
+        this.easeInOutCubic(t2)
+      );
+    }
 
-    // Aggiorna il punto di mira
+    // L'interpolazione del target può rimanere lineare perché è sempre vicino al globo
     this.controls.target.lerpVectors(
       this.initialCameraLookAt,
       this.defaultLookAt,
