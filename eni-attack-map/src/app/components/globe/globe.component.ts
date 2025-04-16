@@ -65,7 +65,7 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
   private clock = new THREE.Clock();
   private starField!: THREE.Points;
   private stars: THREE.Points[] = [];
-  private starCount = 10000; // Numero di stelle nello sfondo
+  private starCount = 40000; // Numero di stelle nello sfondo
 
   // Globe parameters
   private radius = environment.globe.radius;
@@ -271,15 +271,16 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     };
 
     // Luci da varie direzioni per un'illuminazione più uniforme
-    createDirectionalLight(1, 1, 1, 0.5);
-    createDirectionalLight(-1, 1, 1, 0.5);
-    createDirectionalLight(1, -1, 1, 0.5);
-    createDirectionalLight(-1, -1, 1, 0.5);
+    createDirectionalLight(1, 1, 1, 2.9); // Increased intensity
+    createDirectionalLight(-1, 1, 1, 2.9); // Increased intensity
+    createDirectionalLight(1, -1, 1, 2.9); // Increased intensity
+    createDirectionalLight(-1, -1, 1, 2.9); // Increased intensity
 
     // Luce posteriore più debole
-    createDirectionalLight(-1, 0, -1, 0.2);
-    createDirectionalLight(1, 0, -1, 0.2);
+    createDirectionalLight(-1, 0, -1, 2); // Increased intensity
+    createDirectionalLight(1, 0, -1, 2); // Increased intensity
   }
+
 
   private createStarField(): void {
     // Creiamo tre layer di stelle con diverse velocità di rotazione
@@ -367,8 +368,9 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       bumpMap: bumpMap,
       bumpScale: 0.5,
       specularMap: specularMap,
-      specular: new THREE.Color('grey'),
-      shininess: 5
+      specular: new THREE.Color(0xffffff), 
+      shininess: 30 ,
+
     });
 
     // Create globe mesh and add to scene
@@ -376,18 +378,19 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
     this.scene.add(this.globe);
 
     // Add atmospheric and glow effects
-    this.addGlowEffect();
-    this.addAtmosphere();
+    //this.addGlowEffect();
+    //this.addAtmosphere();
   }
+
 
   private addGlowEffect(): void {
     // Create glow effect using shader material
     const glowGeometry = new THREE.SphereGeometry(this.radius + 2, this.segments, this.segments);
     const glowMaterial = new THREE.ShaderMaterial({
       uniforms: {
-        'c': { value: 0.1 },
-        'p': { value: 1.4 },
-        glowColor: { value: new THREE.Color(0x00a8ff) },
+        'c': { value: 0.3 }, // Increased intensity
+        'p': { value: 1.2 }, // Reduced falloff
+        glowColor: { value: new THREE.Color(0xadd8e6) }, // Lighter blue
         viewVector: { value: new THREE.Vector3() }
       },
       vertexShader: `
@@ -414,24 +417,26 @@ export class GlobeComponent implements OnInit, AfterViewInit, OnDestroy {
       blending: THREE.AdditiveBlending,
       transparent: true
     });
-
+  
     const glowSphere = new THREE.Mesh(glowGeometry, glowMaterial);
     this.scene.add(glowSphere);
   }
+  
 
   private addAtmosphere(): void {
     // Add thin blue atmosphere layer
-    const atmosphereGeometry = new THREE.SphereGeometry(this.radius + 1, this.segments, this.segments);
+    const atmosphereGeometry = new THREE.SphereGeometry(this.radius + 3, this.segments, this.segments); // Increased radius
     const atmosphereMaterial = new THREE.MeshBasicMaterial({
       color: 0x0077ff,
       transparent: true,
-      opacity: 0.1,
+      opacity: 0, 
       side: THREE.FrontSide
     });
-
+  
     const atmosphere = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
     this.scene.add(atmosphere);
   }
+  
 
   private setupControls(): void {
     // Create orbit controls for camera movement
